@@ -1,0 +1,17 @@
+[package]
+name = "kinsoku-linebreak"
+version = "0.0.1"
+edition = "2021"
+authors = ["Suguru Yamamoto <sgryjp@gmail.com>"]
+description = "Wrap long lines with adherence to kinsoku rules"
+repository = "https://github.com/sgryjp/kinsoku-linebreak"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = "1.0.95"
+clap = { version = "4.5.28", features = ["cargo", "derive", "wrap_help"] }
+unicode-segmentation = "1.12.0"
+unicode-width = { version = "0.2.0", features = ["cjk"] }
+
+[dev-dependencies]
+rstest = "0.24.0"
