@@ -36,7 +36,7 @@ Steps to reproduce the behavior:
 <!-- Please fill the following information. -->
 
 - OS: [e.g. Ubuntu 20.04]
-- kinsoku-linebreak version: [e.g. 0.1.0]
+- kinsoku-line-break version: [e.g. 0.1.0]
 
 ## Additional context
 
