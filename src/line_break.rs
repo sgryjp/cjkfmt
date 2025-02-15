@@ -1,14 +1,21 @@
+//! Define [`LineBreaker`] that finds a line break with adherence to kinsoku rule.
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-const PROHIBITED_LINE_START_GRAPHEMES: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
+/// A set of grapheme clusters that are prohibited at the start of a line.
+pub const PROHIBITED_LINE_START_GRAPHEMES: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
      ヽヾーァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻\
      ‐゠–〜\
      ？ ! ‼ ⁇ ⁈ ⁉\
      ・、:;,\
      。.";
-const PROHIBITED_LINE_END_GRAPHEMES: &str = "([｛〔〈《「『【〘〖〝'\"｟«";
 
+/// A set of grapheme clusters that are prohibited at the end of a line.
+pub const PROHIBITED_LINE_END_GRAPHEMES: &str = "([｛〔〈《「『【〘〖〝'\"｟«";
+
+/// Find a line break with adherence to kinsoku rule.
+///
+/// Use [`LineBreaker::builder`] to create a new instance of [`LineBreaker`].
 #[derive(Debug)]
 pub struct LineBreaker {
     max_width: usize,
@@ -16,17 +23,25 @@ pub struct LineBreaker {
     graphemes_prohibited_at_line_end: Vec<String>,
 }
 
+/// Build a [`LineBreaker`].
 pub struct LineBreakerBuilder {
     line_breaker: LineBreaker,
 }
 
 impl LineBreakerBuilder {
+    /// Sets the maximum width of a line.
+    ///
+    /// The width is measured in terms of fullwidth characters.
+    /// For example, the width of "あ" is 2, and the width of "a" is 1.
     pub fn max_width(mut self, max_width: usize) -> Self {
         self.line_breaker.max_width = max_width;
         self
     }
 
-    fn graphemes_prohibited_at_line_start<T: AsRef<str>>(mut self, graphemes: T) -> Self {
+    /// Sets the grapheme clusters that are prohibited at the start of a line.
+    ///
+    /// This method replaces the default set of prohibited grapheme clusters.
+    fn graphemes_prohibited_at_line_start<S: AsRef<str>>(mut self, graphemes: S) -> Self {
         self.line_breaker.graphemes_prohibited_at_line_start = graphemes
             .as_ref()
             .graphemes(true)
@@ -35,7 +50,10 @@ impl LineBreakerBuilder {
         self
     }
 
-    fn graphemes_prohibited_at_line_end<T: AsRef<str>>(mut self, graphemes: T) -> Self {
+    /// Sets the grapheme clusters that are prohibited at the end of a line.
+    ///
+    /// This method replaces the default set of prohibited grapheme clusters.
+    fn graphemes_prohibited_at_line_end<S: AsRef<str>>(mut self, graphemes: S) -> Self {
         self.line_breaker.graphemes_prohibited_at_line_end = graphemes
             .as_ref()
             .graphemes(true)
@@ -44,6 +62,7 @@ impl LineBreakerBuilder {
         self
     }
 
+    /// Finish building and returns a [`LineBreaker`].
     pub fn build(self) -> anyhow::Result<LineBreaker> {
         if self.line_breaker.max_width < 2 {
             anyhow::bail!(
@@ -57,6 +76,7 @@ impl LineBreakerBuilder {
 }
 
 impl LineBreaker {
+    /// Builds a new [`LineBreaker`] with default settings.
     pub fn builder() -> LineBreakerBuilder {
         LineBreakerBuilder {
             line_breaker: LineBreaker {
@@ -84,6 +104,7 @@ impl LineBreaker {
             .collect::<Vec<&'a str>>()
     }
 
+    /// Finds a line break in the given line and returns its index.
     pub fn next_line_break(&self, line: &str) -> Option<usize> {
         let mut graphemes: Vec<&str> = Vec::with_capacity(128);
         let mut acc_width: usize = 0;
