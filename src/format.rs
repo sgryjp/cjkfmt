@@ -1,12 +1,12 @@
 use std::{
     fs,
     io::{stdin, Read},
-    path::PathBuf,
+    path::Path,
 };
 
 use crate::line_break::LineBreaker;
 
-pub fn format_command(filename: Option<&PathBuf>, max_width: usize) -> anyhow::Result<()> {
+pub fn format_command(filename: Option<&Path>, max_width: usize) -> anyhow::Result<()> {
     // Read content of the specified file or standard input
     let content = match filename {
         Some(filename) => fs::read_to_string(filename)?,

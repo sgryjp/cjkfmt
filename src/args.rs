@@ -12,7 +12,15 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Check whether too long line exists or not.
-    Check {},
+    Check {
+        /// File to process.
+        #[arg()]
+        filename: Option<PathBuf>,
+
+        /// Maximum line width to allow.
+        #[arg(short, long)]
+        max_width: usize,
+    },
 
     /// Wrap long lines with adherence to kinsoku rule.
     Format {
