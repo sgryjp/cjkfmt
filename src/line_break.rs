@@ -104,7 +104,7 @@ impl LineBreaker {
             .collect::<Vec<&'a str>>()
     }
 
-    /// Finds a line break in the given line and returns its index.
+    /// Finds a line break in the given line and returns its byte index.
     pub fn next_line_break(&self, line: &str) -> Option<usize> {
         let mut graphemes: Vec<&str> = Vec::with_capacity(128);
         let mut acc_width: usize = 0;
@@ -165,7 +165,7 @@ mod test {
     use rstest::rstest;
 
     #[test]
-    fn test_max_width() {
+    fn max_width() {
         assert!(LineBreaker::builder().max_width(0).build().is_err());
         assert!(LineBreaker::builder().max_width(1).build().is_err());
         assert!(LineBreaker::builder().max_width(2).build().is_ok());
@@ -182,7 +182,22 @@ mod test {
     #[case(4, "あ「い」う", Some(3))]
     #[case(3, "あ「い」う", Some(3))]
     #[case(2, "あ「い」う", Some(3))]
-    fn test_next_line_break(
+    fn next_line_break(
+        #[case] max_width: usize,
+        #[case] line: &str,
+        #[case] expected: Option<usize>,
+    ) -> anyhow::Result<()> {
+        let line_breaker = LineBreaker::builder().max_width(max_width).build()?;
+        let actual = line_breaker.next_line_break(line);
+        assert_eq!(expected, actual);
+        Ok(())
+    }
+
+    // Cat + ZWJ + Black Large Square
+    #[rstest]
+    #[case(8, "あ「🐈‍⬛」う", Some(19))]
+    #[case(7, "あ「🐈‍⬛」う", Some(3))]
+    fn next_line_break_composite(
         #[case] max_width: usize,
         #[case] line: &str,
         #[case] expected: Option<usize>,
@@ -200,7 +215,7 @@ mod test {
     #[case(2, "あ", "「", 0)]
     #[case(2, "」", "「", 0)]
     #[case(2, "「", "「", 0)]
-    fn test_num_bytes_to_seek_back(
+    fn num_bytes_to_seek_back(
         #[case] max_width: usize,
         #[case] preceding_graphemes: &str,
         #[case] following_grapheme: &str,
