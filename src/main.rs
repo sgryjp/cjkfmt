@@ -13,13 +13,13 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         args::Commands::Check {
-            filename,
+            filenames,
             max_width,
-        } => check_command(filename.as_deref(), max_width)?,
+        } => check_command(filenames, max_width)?,
         args::Commands::Format {
-            filename,
+            filenames,
             max_width,
-        } => format_command(filename.as_deref(), max_width)?,
+        } => format_command(filenames, max_width)?,
     }
     Ok(())
 }

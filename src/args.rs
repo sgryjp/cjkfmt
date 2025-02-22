@@ -13,9 +13,9 @@ pub struct Cli {
 pub enum Commands {
     /// Check whether too long line exists or not.
     Check {
-        /// File to process.
+        /// File(s) to process.
         #[arg()]
-        filename: Option<PathBuf>,
+        filenames: Vec<PathBuf>,
 
         /// Maximum line width to allow.
         #[arg(short, long)]
@@ -24,9 +24,9 @@ pub enum Commands {
 
     /// Wrap long lines with adherence to kinsoku rule.
     Format {
-        /// File to process.
+        /// File(s) to process.
         #[arg()]
-        filename: Option<PathBuf>,
+        filenames: Vec<PathBuf>,
 
         /// Maximum line width to allow.
         #[arg(short, long)]
