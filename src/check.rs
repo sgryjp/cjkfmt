@@ -4,29 +4,29 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use yansi::Condition;
-
 use crate::{diagnostic::Diagnostic, line_break::LineBreaker};
 
-pub fn check_command(filenames: Vec<PathBuf>, max_width: usize) -> anyhow::Result<()> {
-    // Control whether to colorize the output or not
-    yansi::whenever(Condition::STDOUT_IS_TTY);
-
+pub fn check_command<W: std::io::Write>(
+    stderr: &mut W,
+    filenames: Vec<PathBuf>,
+    max_width: usize,
+) -> anyhow::Result<()> {
     // Read content of the specified files or standard input
     if filenames.is_empty() {
         let mut buf = String::with_capacity(1024);
         stdin().read_to_string(&mut buf)?;
-        check_one_file(None, max_width, buf)?;
+        check_one_file(stderr, None, max_width, buf)?;
     } else {
         for filename in filenames {
             let content = fs::read_to_string(&filename)?;
-            check_one_file(Some(&filename), max_width, content)?;
+            check_one_file(stderr, Some(&filename), max_width, content)?;
         }
     }
     Ok(())
 }
 
-fn check_one_file(
+fn check_one_file<W: std::io::Write>(
+    stderr: &mut W,
     filename: Option<&Path>,
     max_width: usize,
     content: String,
@@ -46,9 +46,9 @@ fn check_one_file(
                 line_no,
                 column_no,
                 "W001".to_string(),
-                "Line is too long".to_string(),
+                format!("Line length exceeds {max_width} characters"),
             );
-            eprintln!("{}", diagnostic);
+            writeln!(stderr, "{}", diagnostic)?;
         }
     }
     Ok(())
