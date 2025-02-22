@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{stdin, Read},
+    io::{Read, stdin},
     path::Path,
 };
 

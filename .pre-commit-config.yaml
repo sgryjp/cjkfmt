@@ -11,6 +11,6 @@ repos:
     hooks:
       - id: rustfmt
         name: rustfmt
-        entry: rustfmt
+        entry: rustfmt --edition 2024
         language: system
         types: [file, rust]
