@@ -1,9 +1,9 @@
-# kinsoku-line-break
+# cjkfmt
 
-<!-- [![Crates.io](https://img.shields.io/crates/v/kinsoku-line-break.svg)](https://crates.io/crates/kinsoku-line-break) -->
-<!-- [![Docs.rs](https://docs.rs/kinsoku-line-break/badge.svg)](https://docs.rs/kinsoku-line-break) -->
+<!-- [![Crates.io](https://img.shields.io/crates/v/cjkfmt.svg)](https://crates.io/crates/cjkfmt) -->
+<!-- [![Docs.rs](https://docs.rs/cjkfmt/badge.svg)](https://docs.rs/cjkfmt) -->
 
-[![CI](https://github.com/sgryjp/kinsoku-line-break/workflows/CI/badge.svg)](https://github.com/sgryjp/kinsoku-line-break/actions)
+[![CI](https://github.com/sgryjp/cjkfmt/workflows/CI/badge.svg)](https://github.com/sgryjp/cjkfmt/actions)
 
 ## Installation
 
@@ -11,16 +11,16 @@
 
 - Install the rust toolchain in order to have cargo installed by following
   [this](https://www.rust-lang.org/tools/install) guide.
-- run `cargo install kinsoku-line-break`
+- run `cargo install cjkfmt`
 
 ## License
 
 Licensed under either of
 
 - Apache License, Version 2.0
-  ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+  ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
 - MIT license
-  ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+  ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.
 

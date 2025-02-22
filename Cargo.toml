@@ -1,10 +1,10 @@
 [package]
-name = "kinsoku-line-break"
+name = "cjkfmt"
 version = "0.0.1"
 edition = "2024"
 authors = ["Suguru Yamamoto <sgryjp@gmail.com>"]
-description = "Wrap long lines with adherence to kinsoku rules"
-repository = "https://github.com/sgryjp/kinsoku-line-break"
+description = "Formatter for CJK text files"
+repository = "https://github.com/sgryjp/cjkfmt"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
