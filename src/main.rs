@@ -18,16 +18,12 @@ fn main() -> anyhow::Result<()> {
     // Control whether to colorize the output or not
     yansi::whenever(yansi::Condition::STDOUT_IS_TTY);
 
-    match cli.command {
-        args::Commands::Check {
-            filenames,
-            max_width,
-        } => check_command(&mut stderr, filenames, max_width)?,
-        args::Commands::Format {
-            filenames,
-            max_width,
-        } => format_command(&mut stdout, filenames, max_width)?,
+    if cli.check {
+        check_command(&mut stderr, cli.filenames, cli.max_width)?
+    } else {
+        format_command(&mut stdout, cli.filenames, cli.max_width)?
     }
+
     Ok(())
 }
 

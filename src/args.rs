@@ -1,35 +1,19 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
-    #[command(subcommand)]
-    pub command: Commands,
-}
+    /// Check whether formatting is correct without modifying the files.
+    #[arg(short, long, default_value = "false")]
+    pub check: bool,
 
-#[derive(Subcommand)]
-pub enum Commands {
-    /// Check whether too long line exists or not.
-    Check {
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
+    /// Maximum line width to allow.
+    #[arg(short, long)]
+    pub max_width: usize,
 
-        /// Maximum line width to allow.
-        #[arg(short, long)]
-        max_width: usize,
-    },
-
-    /// Wrap long lines with adherence to kinsoku rule.
-    Format {
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
-
-        /// Maximum line width to allow.
-        #[arg(short, long)]
-        max_width: usize,
-    },
+    /// File(s) to process.
+    #[arg()]
+    pub filenames: Vec<PathBuf>,
 }
