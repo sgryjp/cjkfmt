@@ -15,4 +15,4 @@ unicode-width = { version = "0.2.0", features = ["cjk"] }
 yansi = { version = "1.0.1", features = ["detect-tty"] }
 
 [dev-dependencies]
-rstest = "0.24.0"
+rstest = "0.25.0"
