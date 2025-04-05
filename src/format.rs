@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::line_break::LineBreaker;
+use crate::line_break::{BreakPoint, LineBreaker};
 
 pub fn format_command<W: std::io::Write>(
     stdout: &mut W,
@@ -34,7 +34,12 @@ fn format_one_file<W: std::io::Write>(
     for line in content.split_inclusive('\n') {
         // TODO: Support LF only EOL code
         let mut substring = line;
-        while let Some(line_break) = breaker.next_line_break(substring) {
+        loop {
+            let line_break = match breaker.next_line_break(substring) {
+                BreakPoint::WrapPoint(i) => i,
+                BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => break,
+            };
+
             let (before, after) = substring.split_at(line_break);
             writeln!(stdout, "{}", before)?;
             substring = after;

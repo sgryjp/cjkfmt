@@ -13,6 +13,22 @@ pub const PROHIBITED_LINE_START_GRAPHEMES: &str = ")]｝〕〉》」』】〙〗
 /// A set of grapheme clusters that are prohibited at the end of a line.
 pub const PROHIBITED_LINE_END_GRAPHEMES: &str = "([｛〔〈《「『【〘〖〝'\"｟«";
 
+/// A line break point detected by [`LineBreaker`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum BreakPoint {
+    /// A line break caused by an EOL code such as CR+LF or LF.
+    EndOfLine(usize),
+
+    /// A line break detected by the [`LineBreaker`].
+    ///
+    /// This is a point where the line exceeds the maximum width and should be
+    /// wrapped.
+    WrapPoint(usize),
+
+    /// End of the input text.
+    EndOfText(usize),
+}
+
 /// Find a line break with adherence to kinsoku rule.
 ///
 /// Use [`LineBreaker::builder`] to create a new instance of [`LineBreaker`].
@@ -105,27 +121,28 @@ impl LineBreaker {
     }
 
     /// Finds a line break in the given line and returns its byte index.
-    pub fn next_line_break(&self, line: &str) -> Option<usize> {
+    pub fn next_line_break(&self, line: &str) -> BreakPoint {
         let mut graphemes: Vec<&str> = Vec::with_capacity(128);
         let mut acc_width: usize = 0;
         for (i, grapheme) in line.grapheme_indices(true) {
             // Stop if reached EOL.
             if grapheme.ends_with('\n') {
-                return None;
+                // TODO: CR only
+                return BreakPoint::EndOfLine(i);
             }
 
             // Test whether rendering this grapheme cluster will exceed the limit or not
             let width = grapheme.width_cjk();
             if self.max_width < acc_width + width {
                 let nbytes_seek_back = self.num_bytes_to_seek_back(graphemes.as_slice(), grapheme);
-                return Some(i - nbytes_seek_back);
+                return BreakPoint::WrapPoint(i - nbytes_seek_back);
             }
 
             // Go to next grapheme cluster
             graphemes.push(grapheme);
             acc_width += width;
         }
-        None
+        BreakPoint::EndOfText(line.len())
     }
 
     fn num_bytes_to_seek_back(
@@ -173,19 +190,19 @@ mod test {
     }
 
     #[rstest]
-    #[case(10, "あ「い」う", None)]
-    #[case(9, "あ「い」う", Some(12))]
-    #[case(8, "あ「い」う", Some(12))]
-    #[case(7, "あ「い」う", Some(3))]
-    #[case(6, "あ「い」う", Some(3))]
-    #[case(5, "あ「い」う", Some(3))]
-    #[case(4, "あ「い」う", Some(3))]
-    #[case(3, "あ「い」う", Some(3))]
-    #[case(2, "あ「い」う", Some(3))]
+    #[case(10, "あ「い」う", BreakPoint::EndOfText(15))]
+    #[case(9, "あ「い」う", BreakPoint::WrapPoint(12))]
+    #[case(8, "あ「い」う", BreakPoint::WrapPoint(12))]
+    #[case(7, "あ「い」う", BreakPoint::WrapPoint(3))]
+    #[case(6, "あ「い」う", BreakPoint::WrapPoint(3))]
+    #[case(5, "あ「い」う", BreakPoint::WrapPoint(3))]
+    #[case(4, "あ「い」う", BreakPoint::WrapPoint(3))]
+    #[case(3, "あ「い」う", BreakPoint::WrapPoint(3))]
+    #[case(2, "あ「い」う", BreakPoint::WrapPoint(3))]
     fn next_line_break(
         #[case] max_width: usize,
         #[case] line: &str,
-        #[case] expected: Option<usize>,
+        #[case] expected: BreakPoint,
     ) -> anyhow::Result<()> {
         let line_breaker = LineBreaker::builder().max_width(max_width).build()?;
         let actual = line_breaker.next_line_break(line);
@@ -195,12 +212,12 @@ mod test {
 
     // Cat + ZWJ + Black Large Square
     #[rstest]
-    #[case(8, "あ「🐈‍⬛」う", Some(19))]
-    #[case(7, "あ「🐈‍⬛」う", Some(3))]
+    #[case(8, "あ「🐈‍⬛」う", BreakPoint::WrapPoint(19))]
+    #[case(7, "あ「🐈‍⬛」う", BreakPoint::WrapPoint(3))]
     fn next_line_break_composite(
         #[case] max_width: usize,
         #[case] line: &str,
-        #[case] expected: Option<usize>,
+        #[case] expected: BreakPoint,
     ) -> anyhow::Result<()> {
         let line_breaker = LineBreaker::builder().max_width(max_width).build()?;
         let actual = line_breaker.next_line_break(line);
