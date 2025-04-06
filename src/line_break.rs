@@ -2,16 +2,16 @@
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-/// A set of grapheme clusters that are prohibited at the start of a line.
-pub const PROHIBITED_LINE_START_GRAPHEMES: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
-     ヽヾーァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻\
-     ‐゠–〜\
-     ？ ! ‼ ⁇ ⁈ ⁉\
-     ・、:;,\
-     。.";
+/// Grapheme clusters prohibited at the start of a line.
+pub const PROHIBITED_START: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
+    ヽヾーァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻\
+    ‐゠–〜\
+    ？ ! ‼ ⁇ ⁈ ⁉\
+    ・、:;,\
+    。.";
 
-/// A set of grapheme clusters that are prohibited at the end of a line.
-pub const PROHIBITED_LINE_END_GRAPHEMES: &str = "([｛〔〈《「『【〘〖〝'\"｟«";
+/// Grapheme clusters prohibited at the end of a line.
+pub const PROHIBITED_END: &str = "([｛〔〈《「『【〘〖〝'\"｟«";
 
 /// A line break point detected by [`LineBreaker`].
 #[derive(Debug, PartialEq, Eq)]
@@ -35,8 +35,8 @@ pub enum BreakPoint {
 #[derive(Debug)]
 pub struct LineBreaker {
     max_width: usize,
-    graphemes_prohibited_at_line_start: Vec<String>, // TODO: Use &str
-    graphemes_prohibited_at_line_end: Vec<String>,
+    prohibited_start: Vec<String>,
+    prohibited_end: Vec<String>,
 }
 
 /// Build a [`LineBreaker`].
@@ -57,8 +57,8 @@ impl LineBreakerBuilder {
     /// Sets the grapheme clusters that are prohibited at the start of a line.
     ///
     /// This method replaces the default set of prohibited grapheme clusters.
-    fn graphemes_prohibited_at_line_start<S: AsRef<str>>(mut self, graphemes: S) -> Self {
-        self.line_breaker.graphemes_prohibited_at_line_start = graphemes
+    fn prohibited_start<S: AsRef<str>>(mut self, graphemes: S) -> Self {
+        self.line_breaker.prohibited_start = graphemes
             .as_ref()
             .graphemes(true)
             .map(|s| s.to_owned())
@@ -69,8 +69,8 @@ impl LineBreakerBuilder {
     /// Sets the grapheme clusters that are prohibited at the end of a line.
     ///
     /// This method replaces the default set of prohibited grapheme clusters.
-    fn graphemes_prohibited_at_line_end<S: AsRef<str>>(mut self, graphemes: S) -> Self {
-        self.line_breaker.graphemes_prohibited_at_line_end = graphemes
+    fn prohibited_end<S: AsRef<str>>(mut self, graphemes: S) -> Self {
+        self.line_breaker.prohibited_end = graphemes
             .as_ref()
             .graphemes(true)
             .map(|s| s.to_string())
@@ -82,7 +82,7 @@ impl LineBreakerBuilder {
     pub fn build(self) -> anyhow::Result<LineBreaker> {
         if self.line_breaker.max_width < 2 {
             anyhow::bail!(
-                "max_width out of range: {}. Cannot be below 2.",
+                "max_width out of range: {} (cannot be below 2)",
                 self.line_breaker.max_width
             )
         } else {
@@ -97,24 +97,24 @@ impl LineBreaker {
         LineBreakerBuilder {
             line_breaker: LineBreaker {
                 max_width: 80,
-                graphemes_prohibited_at_line_start: Vec::new(),
-                graphemes_prohibited_at_line_end: Vec::new(),
+                prohibited_start: Vec::new(),
+                prohibited_end: Vec::new(),
             },
         }
-        .graphemes_prohibited_at_line_start(PROHIBITED_LINE_START_GRAPHEMES)
-        .graphemes_prohibited_at_line_end(PROHIBITED_LINE_END_GRAPHEMES)
+        .prohibited_start(PROHIBITED_START)
+        .prohibited_end(PROHIBITED_END)
     }
 
     // TODO: Remove this method
-    fn graphemes_prohibited_at_line_start<'a>(&'a self) -> Vec<&'a str> {
-        self.graphemes_prohibited_at_line_start
+    fn prohibited_start<'a>(&'a self) -> Vec<&'a str> {
+        self.prohibited_start
             .iter()
             .map(|s| s.as_ref())
             .collect::<Vec<&'a str>>()
     }
 
-    fn graphemes_prohibited_at_line_end<'a>(&'a self) -> Vec<&'a str> {
-        self.graphemes_prohibited_at_line_end
+    fn prohibited_end<'a>(&'a self) -> Vec<&'a str> {
+        self.prohibited_end
             .iter()
             .map(|s| s.as_ref())
             .collect::<Vec<&'a str>>()
@@ -156,16 +156,13 @@ impl LineBreaker {
         let mut nbytes_to_rewind = 0;
         let mut following = following_grapheme;
         for grapheme in preceding_graphemes.iter().skip(1).rev() {
-            if self.graphemes_prohibited_at_line_end().contains(grapheme) {
+            if self.prohibited_end().contains(grapheme) {
                 nbytes_to_rewind += grapheme.len();
                 following = grapheme;
                 continue;
             }
 
-            if self
-                .graphemes_prohibited_at_line_start()
-                .contains(&following)
-            {
+            if self.prohibited_start().contains(&following) {
                 nbytes_to_rewind += grapheme.len();
                 following = grapheme;
                 continue;
