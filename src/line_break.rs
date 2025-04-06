@@ -126,9 +126,10 @@ impl LineBreaker {
         let mut acc_width: usize = 0;
         for (i, grapheme) in line.grapheme_indices(true) {
             // Stop if reached EOL.
-            if grapheme.ends_with('\n') {
-                // TODO: CR only
-                return BreakPoint::EndOfLine(i);
+            if grapheme == "\r" || grapheme == "\n" {
+                return BreakPoint::EndOfLine(i + 1);
+            } else if grapheme == "\r\n" {
+                return BreakPoint::EndOfLine(i + 2);
             }
 
             // Test whether rendering this grapheme cluster will exceed the limit or not
@@ -200,6 +201,24 @@ mod test {
     #[case(3, "あ「い」う", BreakPoint::WrapPoint(3))]
     #[case(2, "あ「い」う", BreakPoint::WrapPoint(3))]
     fn next_line_break(
+        #[case] max_width: usize,
+        #[case] line: &str,
+        #[case] expected: BreakPoint,
+    ) -> anyhow::Result<()> {
+        let line_breaker = LineBreaker::builder().max_width(max_width).build()?;
+        let actual = line_breaker.next_line_break(line);
+        assert_eq!(expected, actual);
+        Ok(())
+    }
+
+    #[rstest]
+    #[case(2, "foo\rbar", BreakPoint::WrapPoint(2))]
+    #[case(3, "foo\rbar", BreakPoint::EndOfLine(4))]
+    #[case(4, "foo\rbar", BreakPoint::EndOfLine(4))]
+    #[case(5, "foo\rbar", BreakPoint::EndOfLine(4))]
+    #[case(5, "foo\nbar", BreakPoint::EndOfLine(4))]
+    #[case(5, "foo\r\nbar", BreakPoint::EndOfLine(5))]
+    fn next_line_break_eol(
         #[case] max_width: usize,
         #[case] line: &str,
         #[case] expected: BreakPoint,
