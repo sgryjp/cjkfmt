@@ -39,7 +39,7 @@ fn format_one_file<W: std::io::Write>(
             writeln!(stdout, "{}", before)?;
             substring = after;
         }
-        writeln!(stdout, "{}", substring)?;
+        write!(stdout, "{}", substring)?;
     }
     Ok(())
 }
