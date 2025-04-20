@@ -2,6 +2,8 @@
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+use crate::_log::log;
+
 /// Grapheme clusters prohibited at the start of a line.
 pub const PROHIBITED_START: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
     ヽヾーァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻\
@@ -122,24 +124,36 @@ impl LineBreaker {
 
     /// Finds a line break in the given line and returns its byte index.
     pub fn next_line_break(&self, line: &str) -> BreakPoint {
+        log!("next_line_break() {:?}", line);
+
         let mut graphemes: Vec<&str> = Vec::with_capacity(128);
         let mut acc_width: usize = 0;
         for (i, grapheme) in line.grapheme_indices(true) {
             // Stop if reached EOL.
             if grapheme == "\r" || grapheme == "\n" {
+                log!("  {i:02} {:?} eol", grapheme);
                 return BreakPoint::EndOfLine(i + 1);
             } else if grapheme == "\r\n" {
+                log!("  {i:02} {:?} eol", grapheme);
                 return BreakPoint::EndOfLine(i + 2);
             }
 
             // Test whether rendering this grapheme cluster will exceed the limit or not
             let width = grapheme.width_cjk();
             if self.max_width < acc_width + width {
+                log!("  {i:02} {:?} !!", grapheme);
                 let nbytes_seek_back = self.num_bytes_to_seek_back(graphemes.as_slice(), grapheme);
+                log!(
+                    "  split at {:02} --> {:?}",
+                    i - nbytes_seek_back,
+                    line.split_at_checked(i - nbytes_seek_back)
+                        .expect("invalid split point")
+                );
                 return BreakPoint::WrapPoint(i - nbytes_seek_back);
             }
 
             // Go to next grapheme cluster
+            log!("  {i:02} {:?}", grapheme);
             graphemes.push(grapheme);
             acc_width += width;
         }
@@ -156,18 +170,23 @@ impl LineBreaker {
         let mut nbytes_to_rewind = 0;
         let mut following = following_grapheme;
         for grapheme in preceding_graphemes.iter().skip(1).rev() {
+            // Seek back if the preceding character is prohibited at line end
             if self.prohibited_end().contains(grapheme) {
                 nbytes_to_rewind += grapheme.len();
+                log!("    -{nbytes_to_rewind:02} {grapheme:?} {following:?} (prohibited_end)");
                 following = grapheme;
                 continue;
             }
 
+            // Seek back if the following character is prohibited at line start
             if self.prohibited_start().contains(&following) {
                 nbytes_to_rewind += grapheme.len();
+                log!("    -{nbytes_to_rewind:02} {grapheme:?} {following:?} (prohibited_start)");
                 following = grapheme;
                 continue;
             }
 
+            log!("    -{nbytes_to_rewind:02} {grapheme:?} {following:?} (break)");
             break;
         }
         nbytes_to_rewind
