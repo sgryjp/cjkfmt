@@ -1,3 +1,4 @@
+mod _log;
 mod args;
 mod check;
 mod diagnostic;
