@@ -1,4 +1,5 @@
 //! Define [`LineBreaker`] that finds a line break with adherence to kinsoku rule.
+use unicode_linebreak::{BreakClass, break_property};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -142,14 +143,17 @@ impl LineBreaker {
             let width = grapheme.width_cjk();
             if self.max_width < acc_width + width {
                 log!("  {i:02} {:?} !!", grapheme);
-                let nbytes_seek_back = self.num_bytes_to_seek_back(graphemes.as_slice(), grapheme);
-                log!(
-                    "  split at {:02} --> {:?}",
-                    i - nbytes_seek_back,
-                    line.split_at_checked(i - nbytes_seek_back)
-                        .expect("invalid split point")
-                );
-                return BreakPoint::WrapPoint(i - nbytes_seek_back);
+                if let Some(nbytes_seek_back) =
+                    self.num_bytes_to_seek_back(graphemes.as_slice(), grapheme)
+                {
+                    log!(
+                        "  split at {:02} --> {:?}",
+                        i - nbytes_seek_back,
+                        line.split_at_checked(i - nbytes_seek_back)
+                            .expect("invalid split point")
+                    );
+                    return BreakPoint::WrapPoint(i - nbytes_seek_back);
+                }
             }
 
             // Go to next grapheme cluster
@@ -164,39 +168,101 @@ impl LineBreaker {
         &self,
         preceding_graphemes: &[&str],
         following_grapheme: &str,
-    ) -> usize {
+    ) -> Option<usize> {
         debug_assert!(!preceding_graphemes.is_empty());
 
         let mut nbytes_to_rewind = 0;
         let mut following = following_grapheme;
-        for grapheme in preceding_graphemes.iter().skip(1).rev() {
+        for grapheme in preceding_graphemes.iter().rev() {
+            // Seek back if not breakable according to UAX#14
+            if !is_breakable(grapheme, following) {
+                let grapheme_len = grapheme.len();
+                nbytes_to_rewind += grapheme_len;
+                log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (not breakable)",);
+                following = grapheme;
+                continue;
+            }
+
             // Seek back if the preceding character is prohibited at line end
             if self.prohibited_end().contains(grapheme) {
-                nbytes_to_rewind += grapheme.len();
-                log!("    -{nbytes_to_rewind:02} {grapheme:?} {following:?} (prohibited_end)");
+                let grapheme_len = grapheme.len();
+                nbytes_to_rewind += grapheme_len;
+                log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (prohibited_end)");
                 following = grapheme;
                 continue;
             }
 
             // Seek back if the following character is prohibited at line start
             if self.prohibited_start().contains(&following) {
-                nbytes_to_rewind += grapheme.len();
-                log!("    -{nbytes_to_rewind:02} {grapheme:?} {following:?} (prohibited_start)");
+                let grapheme_len = grapheme.len();
+                nbytes_to_rewind += grapheme_len;
+                log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (prohibited_start)");
                 following = grapheme;
                 continue;
             }
 
-            log!("    -{nbytes_to_rewind:02} {grapheme:?} {following:?} (break)");
-            break;
+            log!("    break: {grapheme:?} {following:?}");
+            return Some(nbytes_to_rewind);
         }
-        nbytes_to_rewind
+        log!("  cannot rewind anymore");
+        None
     }
+}
+
+/// Check whether a line break is allowed between the given grapheme clusters.
+///
+/// This function is based on UAX#14 so kinsoku rules are not considered.
+#[allow(clippy::let_and_return)]
+fn is_breakable(preceding: &str, following: &str) -> bool {
+    debug_assert!(!preceding.is_empty());
+    debug_assert!(!following.is_empty());
+
+    let preceding_break_property = preceding
+        .chars()
+        .last()
+        .map(|c| break_property(c as u32))
+        .expect("`preceding` must be non-empty");
+    let following_break_property = following
+        .chars()
+        .next()
+        .map(|c| break_property(c as u32))
+        .expect("`following` must be non-empty");
+    let breakable = match (preceding_break_property, following_break_property) {
+        (BreakClass::After, _) => false,
+        (_, BreakClass::Before) => false,
+        (BreakClass::BeforeAndAfter, _) => false,
+        (_, BreakClass::BeforeAndAfter) => false,
+        (BreakClass::Alphabetic, BreakClass::Alphabetic) => false,
+        (_, BreakClass::Space) => false,
+        (_, _) => true,
+    };
+    // log!(
+    //     "    {preceding:?}({:?}) {following:?}({:?}) --> {breakable}",
+    //     preceding_break_property,
+    //     following_break_property
+    // );
+    breakable
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use rstest::rstest;
+
+    #[rstest]
+    // not breakable between alphabetic characters
+    #[case("a", "a", false)]
+    #[case("a", "あ", true)]
+    // not breakable before a space
+    #[case("a", " ", false)]
+    #[case(" ", "a", true)]
+    fn is_breakable_normal(
+        #[case] preceding: &str,
+        #[case] following: &str,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(is_breakable(preceding, following), expected);
+    }
 
     #[test]
     fn max_width() {
@@ -228,7 +294,7 @@ mod test {
     }
 
     #[rstest]
-    #[case(2, "foo\rbar", BreakPoint::WrapPoint(2))]
+    #[case(2, "foo\rbar", BreakPoint::EndOfLine(4))]
     #[case(3, "foo\rbar", BreakPoint::EndOfLine(4))]
     #[case(4, "foo\rbar", BreakPoint::EndOfLine(4))]
     #[case(5, "foo\rbar", BreakPoint::EndOfLine(4))]
@@ -261,17 +327,39 @@ mod test {
     }
 
     #[rstest]
-    #[case(8, "あ「い」", "う", 0)]
-    #[case(6, "あ「い", "」", 6)]
-    #[case(3, "あ「", "い", 3)]
-    #[case(2, "あ", "「", 0)]
-    #[case(2, "」", "「", 0)]
-    #[case(2, "「", "「", 0)]
+    #[case(11, "あfoo barい", BreakPoint::EndOfText(13))]
+    #[case(10, "あfoo barい", BreakPoint::WrapPoint(10))]
+    #[case(9, "あfoo barい", BreakPoint::WrapPoint(10))]
+    #[case(8, "あfoo barい", BreakPoint::WrapPoint(7))]
+    #[case(7, "あfoo barい", BreakPoint::WrapPoint(7))]
+    #[case(6, "あfoo barい", BreakPoint::WrapPoint(7))]
+    #[case(5, "あfoo barい", BreakPoint::WrapPoint(3))]
+    #[case(4, "あfoo barい", BreakPoint::WrapPoint(3))]
+    #[case(3, "あfoo barい", BreakPoint::WrapPoint(3))]
+    #[case(2, "あfoo barい", BreakPoint::WrapPoint(3))]
+    fn next_line_break_western_word_wrap(
+        #[case] max_width: usize,
+        #[case] line: &str,
+        #[case] expected: BreakPoint,
+    ) -> anyhow::Result<()> {
+        let line_breaker = LineBreaker::builder().max_width(max_width).build()?;
+        let actual = line_breaker.next_line_break(line);
+        assert_eq!(expected, actual);
+        Ok(())
+    }
+
+    #[rstest]
+    #[case(8, "あ「い」", "う", Some(0))]
+    #[case(6, "あ「い", "」", Some(6))]
+    #[case(3, "あ「", "い", Some(3))]
+    #[case(2, "あ", "「", Some(0))]
+    #[case(2, "」", "「", Some(0))]
+    #[case(2, "「", "「", None)]
     fn num_bytes_to_seek_back(
         #[case] max_width: usize,
         #[case] preceding_graphemes: &str,
         #[case] following_grapheme: &str,
-        #[case] expected: usize,
+        #[case] expected: Option<usize>,
     ) -> anyhow::Result<()> {
         let preceding_graphemes: Vec<&str> = preceding_graphemes.graphemes(true).collect();
         let line_breaker = LineBreaker::builder().max_width(max_width).build()?;
