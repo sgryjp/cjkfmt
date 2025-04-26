@@ -47,6 +47,30 @@ cd cjkfmt
 cargo test
 ```
 
+#### Setting up lefthook
+
+This project uses [lefthook](https://github.com/evilmartians/lefthook) to enforce linting and formatting standards. To set it up:
+
+1. Install lefthook (if you haven't already):
+
+   ```shell
+   # Using Homebrew (macOS)
+   brew install lefthook
+
+   # Using scoop (Windows)
+   scoop install lefthook
+
+   # Other installation methods are available at https://github.com/evilmartians/lefthook
+   ```
+
+2. Initialize lefthook in the repository:
+
+   ```shell
+   lefthook install
+   ```
+
+This will set up Git hooks that will run linters and formatters automatically on commit and push operations.
+
 ### Useful Commands
 
 - Build and run release version:

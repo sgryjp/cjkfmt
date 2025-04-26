@@ -1,0 +1,24 @@
+skip_output:
+  - meta
+  - success
+  - summary
+
+pre-commit:
+  parallel: true
+  commands:
+    rustfmt:
+      tags: format
+      glob: "*.rs"
+      run: cargo fmt --check -- {staged_files}
+
+pre-push:
+  parallel: true
+  commands:
+    clippy:
+      tags: lint
+      glob: "*.rs"
+      run: clippy -- -D warnings
+    test:
+      tags: test
+      glob: "*.rs"
+      run: cargo test
