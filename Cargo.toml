@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.97"
-clap = { version = "4.5.35", features = ["cargo", "derive", "wrap_help"] }
+clap = { version = "4.5.37", features = ["cargo", "derive", "wrap_help"] }
 unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.12.0"
 unicode-width = { version = "0.2.0", features = ["cjk"] }
