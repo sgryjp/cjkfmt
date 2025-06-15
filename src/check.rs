@@ -39,7 +39,7 @@ pub fn check_command<W: std::io::Write>(
     Ok(())
 }
 
-fn check_one_file(
+pub(crate) fn check_one_file(
     filename: Option<&str>,
     max_width: usize,
     content: String,

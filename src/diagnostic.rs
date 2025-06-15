@@ -1,10 +1,11 @@
 //! The [`Diagnostic`] type for storing diagnostic information.
 use core::fmt::Display;
 
+use serde::Serialize;
 use yansi::Paint;
 
 /// Diagnostic information for a single issue.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Diagnostic {
     /// The name of the file where the issue was detected.
     filename: Option<String>,

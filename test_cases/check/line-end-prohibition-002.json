@@ -1,0 +1,15 @@
+{
+  "options": {
+    "maxWidth": 5
+  },
+  "input": "あ「い",
+  "expected": [
+    {
+      "filename": "test_cases/check/line-end-prohibition-002.json",
+      "line": 0,
+      "column": 1,
+      "code": "W001",
+      "message": "Line length exceeds 5 characters"
+    }
+  ]
+}

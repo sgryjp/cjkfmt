@@ -1,0 +1,7 @@
+{
+  "options": {
+    "maxWidth": 5
+  },
+  "input": "「「「",
+  "expected": []
+}

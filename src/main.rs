@@ -29,35 +29,47 @@ fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     use std::path::PathBuf;
 
-    #[test]
-    fn check() -> anyhow::Result<()> {
-        let mut stderr = Vec::new();
-        let filenames = vec![PathBuf::from("sample_files/japanese.md")];
-        let max_width = 80;
+    use serde::Deserialize;
+    use serde_json::{self, Value};
+    use test_generator::test_resources;
 
-        yansi::whenever(yansi::Condition::NEVER);
-        let result = check_command(&mut stderr, filenames, max_width);
-        assert!(result.is_ok());
-        let lines = String::from_utf8(stderr)?;
-        let lines = lines
-            .split('\n')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<&str>>();
-        assert_eq!(lines.len(), 2);
-        assert_eq!(
-            lines[0],
-            "sample_files/japanese.md:9:41: W001 Line length exceeds 80 characters"
-        );
-        assert_eq!(
-            lines[1],
-            "sample_files/japanese.md:19:41: W001 Line length exceeds 80 characters"
-        );
-        Ok(())
+    use crate::check::check_one_file;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CheckTestCaseOptions {
+        max_width: u16,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CheckTestCase {
+        options: CheckTestCaseOptions,
+        input: String,
+        expected: Value,
+    }
+
+    #[test_resources("test_cases/check/*.json")]
+    fn check(resource: &str) {
+        let content = std::fs::read_to_string(resource)
+            .expect(format!("failed to read resource: {:?}", resource).as_str());
+        let test_case: CheckTestCase = serde_json::from_str(&content)
+            .expect(format!("failed to parse resource: {:?}", resource).as_str());
+        let diagnostics = check_one_file(
+            Some(resource),
+            test_case.options.max_width as usize,
+            test_case.input,
+        )
+        .expect(format!("failed on checking a file: {:?}", resource).as_str());
+
+        let actual: serde_json::Value = serde_json::to_value(diagnostics)
+            .expect(format!("failed to serialize actual result: {:?}", resource).as_str());
+        assert_eq!(actual, test_case.expected);
     }
 
     #[test]
