@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{Read, stdin},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use crate::{
@@ -14,37 +14,45 @@ pub fn check_command<W: std::io::Write>(
     filenames: Vec<PathBuf>,
     max_width: usize,
 ) -> anyhow::Result<()> {
+    let mut diagnostics = Vec::new();
+
     // Read content of the specified files or standard input
     if filenames.is_empty() {
         let mut buf = String::with_capacity(1024);
         stdin().read_to_string(&mut buf)?;
-        check_one_file(stderr, None, max_width, buf)?;
+        let diagnostic = check_one_file(None, max_width, buf)?;
+        diagnostics.extend(diagnostic);
     } else {
         for filename in filenames {
             let content = fs::read_to_string(&filename)?;
-            check_one_file(stderr, Some(&filename), max_width, content)?;
+            let diagnostics_ = check_one_file(
+                Some(&filename.as_path().to_string_lossy()),
+                max_width,
+                content,
+            )?;
+            diagnostics.extend(diagnostics_);
         }
+    }
+    for diagnostic in diagnostics {
+        writeln!(stderr, "{}", diagnostic)?;
     }
     Ok(())
 }
 
-fn check_one_file<W: std::io::Write>(
-    stderr: &mut W,
-    filename: Option<&Path>,
+fn check_one_file(
+    filename: Option<&str>,
     max_width: usize,
     content: String,
-) -> Result<(), anyhow::Error> {
+) -> Result<Vec<Diagnostic>, anyhow::Error> {
     let breaker = LineBreaker::builder().max_width(max_width).build()?;
 
+    let mut diagnostics = Vec::new();
     for (line_no, line) in content.split_inclusive('\n').enumerate() {
         // TODO: Support CR only
         let line_break = match breaker.next_line_break(line) {
             BreakPoint::WrapPoint(i) => i,
             BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => continue,
         };
-
-        let filename = filename.map(|p| p.to_string_lossy());
-        let filename = filename.as_deref();
 
         let (precedings, _) = line.split_at(line_break);
         let column_no = precedings.encode_utf16().fold(0, |acc, _| acc + 1);
@@ -55,7 +63,7 @@ fn check_one_file<W: std::io::Write>(
             "W001".to_string(),
             format!("Line length exceeds {max_width} characters"),
         );
-        writeln!(stderr, "{}", diagnostic)?;
+        diagnostics.push(diagnostic);
     }
-    Ok(())
+    Ok(diagnostics)
 }
