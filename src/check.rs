@@ -4,6 +4,8 @@ use std::{
     path::PathBuf,
 };
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use crate::{
     diagnostic::Diagnostic,
     line_break::{BreakPoint, LineBreaker},
@@ -55,10 +57,15 @@ pub(crate) fn check_one_file(
             BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => continue,
         };
 
-        let (precedings, _) = line.split_at(line_break);
+        let (precedings, followings) = line.split_at(line_break);
         let column_no = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
         let start = Position::new(line_no as u32, column_no);
-        let end = start.clone(); // TODO:
+        let next_char_len = followings
+            .graphemes(true)
+            .next()
+            .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
+            .unwrap_or(0u32);
+        let end = Position::new(line_no as u32, column_no + next_char_len);
         let diagnostic = Diagnostic::new(
             filename,
             start,

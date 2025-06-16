@@ -7,7 +7,7 @@
     {
       "filename": "test_cases/check/line-end-prohibition-002.json",
       "start": { "line": 0, "column": 1 },
-      "end": { "line": 0, "column": 1 },
+      "end": { "line": 0, "column": 2 },
       "code": "W001",
       "message": "Line length exceeds 5 characters"
     }
