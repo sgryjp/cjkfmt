@@ -4,39 +4,39 @@ use core::fmt::Display;
 use serde::{Deserialize, Serialize};
 use yansi::Paint;
 
+use crate::position::Position;
+
 /// Diagnostic information for a single issue.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Diagnostic {
     /// The name of the file where the issue was detected.
-    filename: Option<String>,
+    pub filename: Option<String>,
 
-    /// Zero-based line number of where the issue was detected.
-    line: u32,
+    /// The start position of the half-open range (inclusive) where the issue applies.
+    pub start: Position,
 
-    /// Zero-based column number of where the issue was detected.
-    ///
-    /// This is the number of UTF-16 code units from the start of the line.
-    column: u32,
+    /// The end position of the half-open range (exclusive) where the issue applies.
+    pub end: Position,
 
     /// A unique code identifying the issue.
-    code: String,
+    pub code: String,
 
     /// A human-readable message describing the issue.
-    message: String,
+    pub message: String,
 }
 
 impl Diagnostic {
     pub fn new<S: Into<String>>(
         filename: Option<S>,
-        line: u32,
-        column: u32,
+        start: Position,
+        end: Position,
         code: String,
         message: String,
     ) -> Self {
         Self {
             filename: filename.map(Into::into),
-            line,
-            column,
+            start,
+            end,
             code,
             message,
         }
@@ -46,11 +46,13 @@ impl Diagnostic {
 impl Display for Diagnostic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let filename = self.filename.as_deref().unwrap_or("<stdin>");
+        let line = self.start.line;
+        let column = self.start.column;
         let buf = format!(
             "{}\0{}\0{}\0{}\0{}",
             filename,
-            self.line + 1,
-            self.column + 1,
+            line + 1,
+            column + 1,
             self.code,
             self.message
         );

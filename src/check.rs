@@ -7,6 +7,7 @@ use std::{
 use crate::{
     diagnostic::Diagnostic,
     line_break::{BreakPoint, LineBreaker},
+    position::Position,
 };
 
 pub fn check_command<W: std::io::Write>(
@@ -56,10 +57,12 @@ pub(crate) fn check_one_file(
 
         let (precedings, _) = line.split_at(line_break);
         let column_no = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
+        let start = Position::new(line_no as u32, column_no);
+        let end = start.clone(); // TODO:
         let diagnostic = Diagnostic::new(
             filename,
-            line_no as u32,
-            column_no,
+            start,
+            end,
             "W001".to_string(),
             format!("Line length exceeds {max_width} characters"),
         );

@@ -4,6 +4,7 @@ mod check;
 mod diagnostic;
 mod format;
 mod line_break;
+mod position;
 
 use std::io::{stderr, stdout};
 
