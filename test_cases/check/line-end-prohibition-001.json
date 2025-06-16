@@ -3,5 +3,5 @@
     "maxWidth": 6
   },
   "input": "あ「い",
-  "expected": []
+  "diagnostics": []
 }

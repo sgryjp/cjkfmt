@@ -35,10 +35,10 @@ mod tests {
     use std::path::PathBuf;
 
     use serde::Deserialize;
-    use serde_json::{self, Value};
+    use serde_json::{self};
     use test_generator::test_resources;
 
-    use crate::check::check_one_file;
+    use crate::{check::check_one_file, diagnostic::Diagnostic};
 
     #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -51,7 +51,7 @@ mod tests {
     struct CheckTestCase {
         options: CheckTestCaseOptions,
         input: String,
-        expected: Value,
+        diagnostics: Vec<Diagnostic>,
     }
 
     #[test_resources("test_cases/check/*.json")]
@@ -60,13 +60,10 @@ mod tests {
             .unwrap_or_else(|_| panic!("failed to read resource: {:?}", resource));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {:?}", resource));
-        let diagnostics =
-            check_one_file(Some(resource), test_case.options.max_width, test_case.input)
-                .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
+        let actual = check_one_file(Some(resource), test_case.options.max_width, test_case.input)
+            .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
 
-        let actual: serde_json::Value = serde_json::to_value(diagnostics)
-            .unwrap_or_else(|_| panic!("failed to serialize actual result: {:?}", resource));
-        assert_eq!(actual, test_case.expected);
+        assert_eq!(actual, test_case.diagnostics);
     }
 
     #[test]

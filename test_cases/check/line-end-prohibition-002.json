@@ -3,7 +3,7 @@
     "maxWidth": 5
   },
   "input": "あ「い",
-  "expected": [
+  "diagnostics": [
     {
       "filename": "test_cases/check/line-end-prohibition-002.json",
       "line": 0,
