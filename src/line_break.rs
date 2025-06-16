@@ -37,7 +37,7 @@ pub enum BreakPoint {
 /// Use [`LineBreaker::builder`] to create a new instance of [`LineBreaker`].
 #[derive(Debug)]
 pub struct LineBreaker {
-    max_width: usize,
+    max_width: u32,
     prohibited_start: Vec<String>,
     prohibited_end: Vec<String>,
 }
@@ -52,7 +52,7 @@ impl LineBreakerBuilder {
     ///
     /// The width is measured in terms of fullwidth characters.
     /// For example, the width of "あ" is 2, and the width of "a" is 1.
-    pub fn max_width(mut self, max_width: usize) -> Self {
+    pub fn max_width(mut self, max_width: u32) -> Self {
         self.line_breaker.max_width = max_width;
         self
     }
@@ -128,7 +128,7 @@ impl LineBreaker {
         log!("next_line_break() {:?}", line);
 
         let mut graphemes: Vec<&str> = Vec::with_capacity(128);
-        let mut acc_width: usize = 0;
+        let mut acc_width = 0u32;
         for (i, grapheme) in line.grapheme_indices(true) {
             // Stop if reached EOL.
             if grapheme == "\r" || grapheme == "\n" {
@@ -140,7 +140,7 @@ impl LineBreaker {
             }
 
             // Test whether rendering this grapheme cluster will exceed the limit or not
-            let width = grapheme.width_cjk();
+            let width = grapheme.width_cjk() as u32;
             if self.max_width < acc_width + width {
                 log!("  {i:02} {:?} !!", grapheme);
                 if let Some(nbytes_seek_back) =
@@ -283,7 +283,7 @@ mod test {
     #[case(3, "あ「い」う", BreakPoint::WrapPoint(3))]
     #[case(2, "あ「い」う", BreakPoint::WrapPoint(3))]
     fn next_line_break(
-        #[case] max_width: usize,
+        #[case] max_width: u32,
         #[case] line: &str,
         #[case] expected: BreakPoint,
     ) -> anyhow::Result<()> {
@@ -301,7 +301,7 @@ mod test {
     #[case(5, "foo\nbar", BreakPoint::EndOfLine(4))]
     #[case(5, "foo\r\nbar", BreakPoint::EndOfLine(5))]
     fn next_line_break_eol(
-        #[case] max_width: usize,
+        #[case] max_width: u32,
         #[case] line: &str,
         #[case] expected: BreakPoint,
     ) -> anyhow::Result<()> {
@@ -316,7 +316,7 @@ mod test {
     #[case(8, "あ「🐈‍⬛」う", BreakPoint::WrapPoint(19))]
     #[case(7, "あ「🐈‍⬛」う", BreakPoint::WrapPoint(3))]
     fn next_line_break_composite(
-        #[case] max_width: usize,
+        #[case] max_width: u32,
         #[case] line: &str,
         #[case] expected: BreakPoint,
     ) -> anyhow::Result<()> {
@@ -338,7 +338,7 @@ mod test {
     #[case(3, "あfoo barい", BreakPoint::WrapPoint(3))]
     #[case(2, "あfoo barい", BreakPoint::WrapPoint(3))]
     fn next_line_break_western_word_wrap(
-        #[case] max_width: usize,
+        #[case] max_width: u32,
         #[case] line: &str,
         #[case] expected: BreakPoint,
     ) -> anyhow::Result<()> {
@@ -356,7 +356,7 @@ mod test {
     #[case(2, "」", "「", Some(0))]
     #[case(2, "「", "「", None)]
     fn num_bytes_to_seek_back(
-        #[case] max_width: usize,
+        #[case] max_width: u32,
         #[case] preceding_graphemes: &str,
         #[case] following_grapheme: &str,
         #[case] expected: Option<usize>,

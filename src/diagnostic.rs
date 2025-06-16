@@ -11,12 +11,12 @@ pub struct Diagnostic {
     filename: Option<String>,
 
     /// Zero-based line number of where the issue was detected.
-    line: usize,
+    line: u32,
 
     /// Zero-based column number of where the issue was detected.
     ///
     /// This is the number of UTF-16 code units from the start of the line.
-    column: usize,
+    column: u32,
 
     /// A unique code identifying the issue.
     code: String,
@@ -28,8 +28,8 @@ pub struct Diagnostic {
 impl Diagnostic {
     pub fn new<S: Into<String>>(
         filename: Option<S>,
-        line: usize,
-        column: usize,
+        line: u32,
+        column: u32,
         code: String,
         message: String,
     ) -> Self {

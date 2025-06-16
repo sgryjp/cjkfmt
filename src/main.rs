@@ -43,7 +43,7 @@ mod tests {
     #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct CheckTestCaseOptions {
-        max_width: u16,
+        max_width: u32,
     }
 
     #[derive(Debug, Deserialize)]
@@ -60,12 +60,9 @@ mod tests {
             .unwrap_or_else(|_| panic!("failed to read resource: {:?}", resource));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {:?}", resource));
-        let diagnostics = check_one_file(
-            Some(resource),
-            test_case.options.max_width as usize,
-            test_case.input,
-        )
-        .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
+        let diagnostics =
+            check_one_file(Some(resource), test_case.options.max_width, test_case.input)
+                .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
 
         let actual: serde_json::Value = serde_json::to_value(diagnostics)
             .unwrap_or_else(|_| panic!("failed to serialize actual result: {:?}", resource));

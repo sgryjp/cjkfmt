@@ -9,7 +9,7 @@ use crate::line_break::{BreakPoint, LineBreaker};
 pub fn format_command<W: std::io::Write>(
     stdout: &mut W,
     filenames: Vec<PathBuf>,
-    max_width: usize,
+    max_width: u32,
 ) -> anyhow::Result<()> {
     // Read content of the specified files or standard input
     if filenames.is_empty() {
@@ -27,7 +27,7 @@ pub fn format_command<W: std::io::Write>(
 
 fn format_one_file<W: std::io::Write>(
     stdout: &mut W,
-    max_width: usize,
+    max_width: u32,
     content: String,
 ) -> Result<(), anyhow::Error> {
     let breaker = LineBreaker::builder().max_width(max_width).build()?;

@@ -11,7 +11,7 @@ pub struct Cli {
 
     /// Maximum line width to allow.
     #[arg(short, long)]
-    pub max_width: usize,
+    pub max_width: u32,
 
     /// File(s) to process.
     #[arg()]
