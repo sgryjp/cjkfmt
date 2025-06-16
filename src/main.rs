@@ -30,7 +30,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
+mod file_based_tests {
     use super::*;
 
     use std::path::PathBuf;
@@ -39,6 +39,7 @@ mod tests {
     use serde_json::{self};
     use test_generator::test_resources;
 
+    use crate::_log::test_log;
     use crate::{check::check_one_file, diagnostic::Diagnostic};
 
     #[derive(Debug, Deserialize)]
@@ -64,6 +65,9 @@ mod tests {
         let actual = check_one_file(Some(resource), test_case.options.max_width, test_case.input)
             .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
 
+        for (i, diagnostic) in actual.iter().enumerate() {
+            test_log!("diagnostics[{:2}] = {}", i, diagnostic);
+        }
         assert_eq!(actual, test_case.diagnostics);
     }
 

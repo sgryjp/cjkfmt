@@ -3,7 +3,7 @@ use unicode_linebreak::{BreakClass, break_property};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::_log::log;
+use crate::_log::test_log;
 
 /// Grapheme clusters prohibited at the start of a line.
 pub const PROHIBITED_START: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
@@ -125,28 +125,28 @@ impl LineBreaker {
 
     /// Finds a line break in the given line and returns its byte index.
     pub fn next_line_break(&self, line: &str) -> BreakPoint {
-        log!("next_line_break() {:?}", line);
+        test_log!("next_line_break() {:?}", line);
 
         let mut graphemes: Vec<&str> = Vec::with_capacity(128);
         let mut acc_width = 0u32;
         for (i, grapheme) in line.grapheme_indices(true) {
             // Stop if reached EOL.
             if grapheme == "\r" || grapheme == "\n" {
-                log!("  {i:02} {:?} eol", grapheme);
+                test_log!("  {i:02} {:?} eol", grapheme);
                 return BreakPoint::EndOfLine(i + 1);
             } else if grapheme == "\r\n" {
-                log!("  {i:02} {:?} eol", grapheme);
+                test_log!("  {i:02} {:?} eol", grapheme);
                 return BreakPoint::EndOfLine(i + 2);
             }
 
             // Test whether rendering this grapheme cluster will exceed the limit or not
             let width = grapheme.width_cjk() as u32;
             if self.max_width < acc_width + width {
-                log!("  {i:02} {:?} !!", grapheme);
+                test_log!("  {i:02} {:?} !!", grapheme);
                 if let Some(nbytes_seek_back) =
                     self.num_bytes_to_seek_back(graphemes.as_slice(), grapheme)
                 {
-                    log!(
+                    test_log!(
                         "  split at {:02} --> {:?}",
                         i - nbytes_seek_back,
                         line.split_at_checked(i - nbytes_seek_back)
@@ -157,7 +157,7 @@ impl LineBreaker {
             }
 
             // Go to next grapheme cluster
-            log!("  {i:02} {:?}", grapheme);
+            test_log!("  {i:02} {:?}", grapheme);
             graphemes.push(grapheme);
             acc_width += width;
         }
@@ -178,7 +178,7 @@ impl LineBreaker {
             if !is_breakable(grapheme, following) {
                 let grapheme_len = grapheme.len();
                 nbytes_to_rewind += grapheme_len;
-                log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (not breakable)",);
+                test_log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (not breakable)",);
                 following = grapheme;
                 continue;
             }
@@ -187,7 +187,7 @@ impl LineBreaker {
             if self.prohibited_end().contains(grapheme) {
                 let grapheme_len = grapheme.len();
                 nbytes_to_rewind += grapheme_len;
-                log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (prohibited_end)");
+                test_log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (prohibited_end)");
                 following = grapheme;
                 continue;
             }
@@ -196,15 +196,17 @@ impl LineBreaker {
             if self.prohibited_start().contains(&following) {
                 let grapheme_len = grapheme.len();
                 nbytes_to_rewind += grapheme_len;
-                log!("    rewind {grapheme_len}: {grapheme:?} {following:?} (prohibited_start)");
+                test_log!(
+                    "    rewind {grapheme_len}: {grapheme:?} {following:?} (prohibited_start)"
+                );
                 following = grapheme;
                 continue;
             }
 
-            log!("    break: {grapheme:?} {following:?}");
+            test_log!("    break: {grapheme:?} {following:?}");
             return Some(nbytes_to_rewind);
         }
-        log!("  cannot rewind anymore");
+        test_log!("  cannot rewind anymore");
         None
     }
 }
