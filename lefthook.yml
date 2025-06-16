@@ -17,7 +17,7 @@ pre-push:
     clippy:
       tags: lint
       glob: "*.rs"
-      run: cargo clippy --all-targets --all-features --workspace
+      run: cargo clippy --all-targets --all-features --workspace -- -D warnings
     test:
       tags: test
       glob: "*.rs"

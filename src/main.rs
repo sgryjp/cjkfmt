@@ -57,18 +57,18 @@ mod tests {
     #[test_resources("test_cases/check/*.json")]
     fn check(resource: &str) {
         let content = std::fs::read_to_string(resource)
-            .expect(format!("failed to read resource: {:?}", resource).as_str());
+            .unwrap_or_else(|_| panic!("failed to read resource: {:?}", resource));
         let test_case: CheckTestCase = serde_json::from_str(&content)
-            .expect(format!("failed to parse resource: {:?}", resource).as_str());
+            .unwrap_or_else(|_| panic!("failed to parse resource: {:?}", resource));
         let diagnostics = check_one_file(
             Some(resource),
             test_case.options.max_width as usize,
             test_case.input,
         )
-        .expect(format!("failed on checking a file: {:?}", resource).as_str());
+        .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
 
         let actual: serde_json::Value = serde_json::to_value(diagnostics)
-            .expect(format!("failed to serialize actual result: {:?}", resource).as_str());
+            .unwrap_or_else(|_| panic!("failed to serialize actual result: {:?}", resource));
         assert_eq!(actual, test_case.expected);
     }
 
