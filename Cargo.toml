@@ -1,6 +1,6 @@
 [package]
 name = "cjkfmt"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 authors = ["Suguru Yamamoto <sgryjp@gmail.com>"]
 description = "Formatter for CJK text files"
