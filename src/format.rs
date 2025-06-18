@@ -34,8 +34,12 @@ fn format_one_file<W: std::io::Write>(
     for line in content.split_inclusive('\n') {
         // TODO: Support LF only EOL code
         let mut substring = line;
-        while let BreakPoint::WrapPoint(line_break) = breaker.next_line_break(substring) {
-            let (before, after) = substring.split_at(line_break);
+        while let BreakPoint::WrapPoint {
+            overflow_pos,
+            adjustment,
+        } = breaker.next_line_break(substring)
+        {
+            let (before, after) = substring.split_at(overflow_pos - adjustment);
             writeln!(stdout, "{}", before)?;
             substring = after;
         }

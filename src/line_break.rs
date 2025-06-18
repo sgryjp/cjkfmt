@@ -25,8 +25,15 @@ pub enum BreakPoint {
     /// A line break detected by the [`LineBreaker`].
     ///
     /// This is a point where the line exceeds the maximum width and should be
-    /// wrapped.
-    WrapPoint(usize),
+    /// wrapped. `WrapPoint` contains the following fields:
+    ///
+    /// - `overflow_pos`: The position of the character that caused the overflow.
+    ///   This is the byte index of the character in the original line.
+    /// - `adjustment`: The number of bytes to backtrack to find an acceptable break point.
+    WrapPoint {
+        overflow_pos: usize,
+        adjustment: usize,
+    },
 
     /// End of the input text.
     EndOfText(usize),
@@ -152,7 +159,10 @@ impl LineBreaker {
                         line.split_at_checked(i - nbytes_seek_back)
                             .expect("invalid split point")
                     );
-                    return BreakPoint::WrapPoint(i - nbytes_seek_back);
+                    return BreakPoint::WrapPoint {
+                        overflow_pos: i,
+                        adjustment: nbytes_seek_back,
+                    };
                 }
             }
 
@@ -276,14 +286,14 @@ mod test {
 
     #[rstest]
     #[case(10, "あ「い」う", BreakPoint::EndOfText(15))]
-    #[case(9, "あ「い」う", BreakPoint::WrapPoint(12))]
-    #[case(8, "あ「い」う", BreakPoint::WrapPoint(12))]
-    #[case(7, "あ「い」う", BreakPoint::WrapPoint(3))]
-    #[case(6, "あ「い」う", BreakPoint::WrapPoint(3))]
-    #[case(5, "あ「い」う", BreakPoint::WrapPoint(3))]
-    #[case(4, "あ「い」う", BreakPoint::WrapPoint(3))]
-    #[case(3, "あ「い」う", BreakPoint::WrapPoint(3))]
-    #[case(2, "あ「い」う", BreakPoint::WrapPoint(3))]
+    #[case(9, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 12, adjustment: 0 })]
+    #[case(8, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 12, adjustment: 0 })]
+    #[case(7, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 9, adjustment: 6 })]
+    #[case(6, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 9, adjustment: 6 })]
+    #[case(5, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 6, adjustment: 3 })]
+    #[case(4, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 6, adjustment: 3 })]
+    #[case(3, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 3, adjustment: 0 })]
+    #[case(2, "あ「い」う", BreakPoint::WrapPoint { overflow_pos: 3, adjustment: 0 })]
     fn next_line_break(
         #[case] max_width: u32,
         #[case] line: &str,
@@ -315,8 +325,8 @@ mod test {
 
     // Cat + ZWJ + Black Large Square
     #[rstest]
-    #[case(8, "あ「🐈‍⬛」う", BreakPoint::WrapPoint(19))]
-    #[case(7, "あ「🐈‍⬛」う", BreakPoint::WrapPoint(3))]
+    #[case(8, "あ「🐈‍⬛」う", BreakPoint::WrapPoint { overflow_pos: 19, adjustment: 0 })]
+    #[case(7, "あ「🐈‍⬛」う", BreakPoint::WrapPoint { overflow_pos: 16, adjustment: 13 })]
     fn next_line_break_composite(
         #[case] max_width: u32,
         #[case] line: &str,
@@ -330,15 +340,15 @@ mod test {
 
     #[rstest]
     #[case(11, "あfoo barい", BreakPoint::EndOfText(13))]
-    #[case(10, "あfoo barい", BreakPoint::WrapPoint(10))]
-    #[case(9, "あfoo barい", BreakPoint::WrapPoint(10))]
-    #[case(8, "あfoo barい", BreakPoint::WrapPoint(7))]
-    #[case(7, "あfoo barい", BreakPoint::WrapPoint(7))]
-    #[case(6, "あfoo barい", BreakPoint::WrapPoint(7))]
-    #[case(5, "あfoo barい", BreakPoint::WrapPoint(3))]
-    #[case(4, "あfoo barい", BreakPoint::WrapPoint(3))]
-    #[case(3, "あfoo barい", BreakPoint::WrapPoint(3))]
-    #[case(2, "あfoo barい", BreakPoint::WrapPoint(3))]
+    #[case(10, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 10, adjustment: 0 })]
+    #[case(9, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 10, adjustment: 0 })]
+    #[case(8, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 9, adjustment: 2 })]
+    #[case(7, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 8, adjustment: 1 })]
+    #[case(6, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 7, adjustment: 0 })]
+    #[case(5, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 6, adjustment: 3 })]
+    #[case(4, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 5, adjustment: 2 })]
+    #[case(3, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 4, adjustment: 1 })]
+    #[case(2, "あfoo barい", BreakPoint::WrapPoint { overflow_pos: 3, adjustment: 0 })]
     fn next_line_break_western_word_wrap(
         #[case] max_width: u32,
         #[case] line: &str,

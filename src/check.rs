@@ -52,12 +52,15 @@ pub(crate) fn check_one_file(
     let mut diagnostics = Vec::new();
     for (line_no, line) in content.split_inclusive('\n').enumerate() {
         // TODO: Support CR only
-        let line_break = match breaker.next_line_break(line) {
-            BreakPoint::WrapPoint(i) => i,
+        let (overflow_pos, adjustment) = match breaker.next_line_break(line) {
+            BreakPoint::WrapPoint {
+                overflow_pos,
+                adjustment,
+            } => (overflow_pos, adjustment),
             BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => continue,
         };
 
-        let (precedings, followings) = line.split_at(line_break);
+        let (precedings, followings) = line.split_at(overflow_pos - adjustment);
         let column_no = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
         let start = Position::new(line_no as u32, column_no);
         let next_char_len = followings
