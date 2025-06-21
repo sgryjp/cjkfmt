@@ -10,7 +10,7 @@ pub struct Cli {
     pub check: bool,
 
     /// Maximum line width to allow.
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "80")]
     pub max_width: u32,
 
     /// File(s) to process.
