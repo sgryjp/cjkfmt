@@ -52,31 +52,44 @@ pub(crate) fn check_one_file(
     let mut diagnostics = Vec::new();
     for (line_no, line) in content.split_inclusive('\n').enumerate() {
         // TODO: Support CR only
-        let overflow_pos = match breaker.next_line_break(line) {
-            BreakPoint::WrapPoint {
-                overflow_pos,
-                adjustment: _,
-            } => overflow_pos,
-            BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => continue,
-        };
 
-        let (precedings, followings) = line.split_at(overflow_pos);
-        let column_no = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
-        let start = Position::new(line_no as u32, column_no);
-        let next_char_len = followings
-            .graphemes(true)
-            .next()
-            .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
-            .unwrap_or(0u32);
-        let end = Position::new(line_no as u32, column_no + next_char_len);
-        let diagnostic = Diagnostic::new(
-            filename,
-            start,
-            end,
-            "W001".to_string(),
-            format!("Line length exceeds {max_width} characters"),
-        );
-        diagnostics.push(diagnostic);
+        // Check line length problem
+        if let Some(diagnostic) = check_line_length(&breaker, filename, line_no as u32, line) {
+            diagnostics.push(diagnostic);
+        }
     }
     Ok(diagnostics)
+}
+
+fn check_line_length(
+    breaker: &LineBreaker,
+    filename: Option<&str>,
+    line_no: u32,
+    line: &str,
+) -> Option<Diagnostic> {
+    let overflow_pos = match breaker.next_line_break(line) {
+        BreakPoint::WrapPoint {
+            overflow_pos,
+            adjustment: _,
+        } => overflow_pos,
+        BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => {
+            return None;
+        }
+    };
+    let (precedings, followings) = line.split_at(overflow_pos);
+    let column_no = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
+    let start = Position::new(line_no, column_no);
+    let next_char_len = followings
+        .graphemes(true)
+        .next()
+        .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
+        .unwrap_or(0u32);
+    let end = Position::new(line_no, column_no + next_char_len);
+    Some(Diagnostic::new(
+        filename,
+        start,
+        end,
+        "W001".to_string(),
+        format!("Line length exceeds {} characters", breaker.max_width()),
+    ))
 }
