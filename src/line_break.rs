@@ -115,6 +115,11 @@ impl LineBreaker {
         .prohibited_end(PROHIBITED_END)
     }
 
+    /// Returns the maximum width of a line.
+    pub fn max_width(&self) -> u32 {
+        self.max_width
+    }
+
     // TODO: Remove this method
     fn prohibited_start<'a>(&'a self) -> Vec<&'a str> {
         self.prohibited_start

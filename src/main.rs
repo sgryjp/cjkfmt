@@ -5,6 +5,7 @@ mod diagnostic;
 mod format;
 mod line_break;
 mod position;
+mod spacing;
 
 use std::io::{stderr, stdout};
 

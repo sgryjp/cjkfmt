@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Spacing check functionality to `check` mode (experimental)
+
 ## v0.0.2
 
 ### Fixed

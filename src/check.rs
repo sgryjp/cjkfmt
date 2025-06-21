@@ -10,6 +10,7 @@ use crate::{
     diagnostic::Diagnostic,
     line_break::{BreakPoint, LineBreaker},
     position::Position,
+    spacing::search_possible_spacing_positions,
 };
 
 pub fn check_command<W: std::io::Write>(
@@ -57,6 +58,11 @@ pub(crate) fn check_one_file(
         if let Some(diagnostic) = check_line_length(&breaker, filename, line_no as u32, line) {
             diagnostics.push(diagnostic);
         }
+
+        // Check spacing problems
+        for diagnostic in check_spacing(filename, line_no as u32, line) {
+            diagnostics.push(diagnostic);
+        }
     }
     Ok(diagnostics)
 }
@@ -92,4 +98,30 @@ fn check_line_length(
         "W001".to_string(),
         format!("Line length exceeds {} characters", breaker.max_width()),
     ))
+}
+
+fn check_spacing(filename: Option<&str>, line_no: u32, line: &str) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    for i in search_possible_spacing_positions(line) {
+        // Calculate number of characters from the beginning of the line
+        let col_no = line[..i].graphemes(true).fold(0u32, |acc, s| {
+            acc + s.encode_utf16().fold(0u32, |acc, _| acc + 1)
+        });
+
+        // Get number of Unicode scalar values of the next character
+        let next_char_len = line
+            .graphemes(true)
+            .nth(i)
+            .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
+            .unwrap_or(0u32);
+
+        diagnostics.push(Diagnostic::new(
+            filename,
+            Position::new(line_no, col_no),
+            Position::new(line_no, col_no + next_char_len),
+            "W002".to_string(),
+            "Possible spacing position found".to_string(),
+        ));
+    }
+    diagnostics
 }
