@@ -9,11 +9,11 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.97"
-clap = { version = "4.5.35", features = ["cargo", "derive", "wrap_help"] }
+clap = { version = "4.5.40", features = ["cargo", "derive", "wrap_help"] }
 serde = { version = "1.0.219", features = ["derive"] }
 unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.12.0"
-unicode-width = { version = "0.2.0", features = ["cjk"] }
+unicode-width = { version = "0.2.1", features = ["cjk"] }
 yansi = { version = "1.0.1", features = ["detect-tty"] }
 
 [dev-dependencies]
