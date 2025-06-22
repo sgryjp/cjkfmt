@@ -1,6 +1,7 @@
 mod _log;
 mod args;
 mod check;
+mod config;
 mod diagnostic;
 mod format;
 mod line_break;
@@ -9,22 +10,24 @@ mod spacing;
 
 use std::io::{stderr, stdout};
 
-use clap::Parser as _;
+use anyhow::Context;
+use clap::Parser;
 
-use crate::{args::Cli, check::check_command, format::format_command};
+use crate::{args::Cli, check::check_command, config::Config, format::format_command};
 
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let args = Cli::parse();
+    let config = Config::from_cli_args(&args).with_context(|| "failed to parse configuration")?;
     let mut stdout = stdout();
     let mut stderr = stderr();
 
     // Control whether to colorize the output or not
     yansi::whenever(yansi::Condition::STDOUT_IS_TTY);
 
-    if cli.check {
-        check_command(&mut stderr, cli.filenames, cli.max_width)?
+    if args.check {
+        check_command(&mut stderr, &config, &args.filenames())?
     } else {
-        format_command(&mut stdout, cli.filenames, cli.max_width)?
+        format_command(&mut stdout, &config, &args.filenames())?
     }
 
     Ok(())
@@ -34,13 +37,12 @@ fn main() -> anyhow::Result<()> {
 mod file_based_tests {
     use super::*;
 
-    use std::path::PathBuf;
-
     use serde::Deserialize;
     use serde_json::{self};
     use test_generator::test_resources;
 
     use crate::_log::test_log;
+    use crate::args::Cli;
     use crate::{check::check_one_file, diagnostic::Diagnostic};
 
     #[derive(Debug, Deserialize)]
@@ -75,8 +77,8 @@ mod file_based_tests {
     #[test]
     fn format() -> anyhow::Result<()> {
         let mut stdout = Vec::new();
-        let filenames = vec![PathBuf::from("sample_files/japanese.md")];
-        let max_width = 80;
+        let args = Cli::parse_from(["cjkfmt", "sample_files/japanese.md"]);
+        let config = Config { max_width: 80 };
         let expected_lines = std::fs::read_to_string("sample_files/japanese--max-width=80.md")?;
         let expected_lines = expected_lines
             .split('\n')
@@ -84,7 +86,7 @@ mod file_based_tests {
             .collect::<Vec<&str>>();
 
         yansi::whenever(yansi::Condition::NEVER);
-        let result = format_command(&mut stdout, filenames, max_width);
+        let result = format_command(&mut stdout, &config, &args.filenames());
         assert!(result.is_ok());
         let lines = String::from_utf8(stdout)?;
         let lines = lines

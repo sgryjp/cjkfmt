@@ -1,12 +1,13 @@
 use std::{
     fs,
     io::{Read, stdin},
-    path::PathBuf,
+    path::Path,
 };
 
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
+    config::Config,
     diagnostic::Diagnostic,
     line_break::{BreakPoint, LineBreaker},
     position::Position,
@@ -15,8 +16,8 @@ use crate::{
 
 pub fn check_command<W: std::io::Write>(
     stderr: &mut W,
-    filenames: Vec<PathBuf>,
-    max_width: u32,
+    config: &Config,
+    filenames: &[&Path],
 ) -> anyhow::Result<()> {
     let mut diagnostics = Vec::new();
 
@@ -24,16 +25,13 @@ pub fn check_command<W: std::io::Write>(
     if filenames.is_empty() {
         let mut buf = String::with_capacity(1024);
         stdin().read_to_string(&mut buf)?;
-        let diagnostic = check_one_file(None, max_width, buf)?;
+        let diagnostic = check_one_file(None, config.max_width, buf)?;
         diagnostics.extend(diagnostic);
     } else {
         for filename in filenames {
-            let content = fs::read_to_string(&filename)?;
-            let diagnostics_ = check_one_file(
-                Some(&filename.as_path().to_string_lossy()),
-                max_width,
-                content,
-            )?;
+            let content = fs::read_to_string(filename)?;
+            let diagnostics_ =
+                check_one_file(Some(&filename.to_string_lossy()), config.max_width, content)?;
             diagnostics.extend(diagnostics_);
         }
     }

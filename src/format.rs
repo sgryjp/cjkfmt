@@ -1,25 +1,28 @@
 use std::{
     fs,
     io::{Read, stdin},
-    path::PathBuf,
+    path::Path,
 };
 
-use crate::line_break::{BreakPoint, LineBreaker};
+use crate::{
+    config::Config,
+    line_break::{BreakPoint, LineBreaker},
+};
 
 pub fn format_command<W: std::io::Write>(
     stdout: &mut W,
-    filenames: Vec<PathBuf>,
-    max_width: u32,
+    config: &Config,
+    filenames: &[&Path],
 ) -> anyhow::Result<()> {
     // Read content of the specified files or standard input
     if filenames.is_empty() {
         let mut buf = String::with_capacity(1024);
         stdin().read_to_string(&mut buf)?;
-        format_one_file(stdout, max_width, buf)?;
+        format_one_file(stdout, config, buf)?;
     } else {
         for filename in filenames.iter() {
             let content = fs::read_to_string(filename)?;
-            format_one_file(stdout, max_width, content)?;
+            format_one_file(stdout, config, content)?;
         }
     }
     Ok(())
@@ -27,10 +30,10 @@ pub fn format_command<W: std::io::Write>(
 
 fn format_one_file<W: std::io::Write>(
     stdout: &mut W,
-    max_width: u32,
+    config: &Config,
     content: String,
 ) -> Result<(), anyhow::Error> {
-    let breaker = LineBreaker::builder().max_width(max_width).build()?;
+    let breaker = LineBreaker::builder().max_width(config.max_width).build()?;
     for line in content.split_inclusive('\n') {
         // TODO: Support LF only EOL code
         let mut substring = line;

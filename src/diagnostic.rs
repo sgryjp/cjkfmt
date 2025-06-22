@@ -44,6 +44,7 @@ impl Diagnostic {
 }
 
 impl Display for Diagnostic {
+    /// Formats the diagnostic information into a human-readable string.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let filename = self.filename.as_deref().unwrap_or("<stdin>");
         let line = self.start.line;
