@@ -28,7 +28,7 @@ pub fn format_command<W: std::io::Write>(
     Ok(())
 }
 
-fn format_one_file<W: std::io::Write>(
+pub(crate) fn format_one_file<W: std::io::Write>(
     stdout: &mut W,
     config: &Config,
     content: String,

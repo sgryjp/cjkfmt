@@ -1,0 +1,7 @@
+{
+  "config": {
+    "max_width": 6
+  },
+  "input": "あ「い",
+  "output": "あ「い"
+}
