@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::args::Cli;
 
 /// The configuration for cjkfmt.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Maximum line width to allow. (default: 80)
     pub max_width: u32,

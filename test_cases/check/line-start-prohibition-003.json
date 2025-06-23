@@ -1,6 +1,6 @@
 {
-  "options": {
-    "maxWidth": 4
+  "config": {
+    "max_width": 4
   },
   "input": "あ」」」",
   "diagnostics": []
