@@ -8,7 +8,7 @@ mod line_break;
 mod position;
 mod spacing;
 
-use std::io::{stderr, stdout};
+use std::io::stdout;
 
 use anyhow::Context;
 use clap::Parser;
@@ -19,13 +19,12 @@ fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
     let config = Config::from_cli_args(&args).with_context(|| "failed to parse configuration")?;
     let mut stdout = stdout();
-    let mut stderr = stderr();
 
     // Control whether to colorize the output or not
     yansi::whenever(yansi::Condition::STDOUT_IS_TTY);
 
     if args.check {
-        check_command(&mut stderr, &config, &args.filenames())?
+        check_command(&mut stdout, &config, &args.filenames())?
     } else {
         format_command(&mut stdout, &config, &args.filenames())?
     }

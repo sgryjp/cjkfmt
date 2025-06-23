@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub fn check_command<W: std::io::Write>(
-    stderr: &mut W,
+    stdout: &mut W,
     config: &Config,
     filenames: &[&Path],
 ) -> anyhow::Result<()> {
@@ -36,7 +36,7 @@ pub fn check_command<W: std::io::Write>(
         }
     }
     for diagnostic in diagnostics {
-        writeln!(stderr, "{}", diagnostic)?;
+        writeln!(stdout, "{}", diagnostic)?;
     }
     Ok(())
 }

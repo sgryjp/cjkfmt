@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Layered configuration support
 
+### Fixed
+
+- Diagnostic messages in check mode are now correctly output to stdout instead of stderr.
+
 ## v0.0.3
 
 ### Added
