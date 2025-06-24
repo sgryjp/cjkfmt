@@ -21,7 +21,12 @@ fn main() -> anyhow::Result<()> {
     let mut stdout = stdout();
 
     // Control whether to colorize the output or not
-    yansi::whenever(yansi::Condition::STDOUT_IS_TTY);
+    let condition = match args.color {
+        args::ColorOutputMode::Always => yansi::Condition::ALWAYS,
+        args::ColorOutputMode::Never => yansi::Condition::NEVER,
+        args::ColorOutputMode::Auto => yansi::Condition::TTY_AND_COLOR,
+    };
+    yansi::whenever(condition);
 
     if args.check {
         check_command(&mut stdout, &config, &args.filenames())?

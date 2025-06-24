@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Command line option `--color` to control whether to use colorized output or not.
+
 ## v0.0.4 - 2025-06-23
 
 ### Added

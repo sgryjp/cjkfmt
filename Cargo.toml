@@ -16,7 +16,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.12.0"
 unicode-width = { version = "0.2.0", features = ["cjk"] }
-yansi = { version = "1.0.1", features = ["detect-tty"] }
+yansi = { version = "1.0.1", features = ["detect-env", "detect-tty"] }
 
 [dev-dependencies]
 rstest = "0.25.0"
