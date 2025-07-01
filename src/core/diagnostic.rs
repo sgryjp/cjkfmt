@@ -4,7 +4,7 @@ use core::fmt::Display;
 use serde::{Deserialize, Serialize};
 use yansi::Paint;
 
-use crate::position::Position;
+use crate::core::position::Position;
 
 /// Diagnostic information for a single issue.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

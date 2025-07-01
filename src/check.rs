@@ -8,9 +8,8 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     config::Config,
-    diagnostic::Diagnostic,
+    core::{diagnostic::Diagnostic, position::Position},
     line_break::{BreakPoint, LineBreaker},
-    position::Position,
     spacing::search_possible_spacing_positions,
 };
 

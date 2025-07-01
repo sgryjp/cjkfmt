@@ -2,10 +2,9 @@ mod _log;
 mod args;
 mod check;
 mod config;
-mod diagnostic;
+mod core;
 mod format;
 mod line_break;
-mod position;
 mod spacing;
 
 use std::io::stdout;
@@ -46,8 +45,9 @@ mod file_based_tests {
     use test_generator::test_resources;
 
     use crate::_log::test_log;
+    use crate::check::check_one_file;
+    use crate::core::diagnostic::Diagnostic;
     use crate::format::format_one_file;
-    use crate::{check::check_one_file, diagnostic::Diagnostic};
 
     #[derive(Debug, Deserialize)]
     struct CheckTestCase {
