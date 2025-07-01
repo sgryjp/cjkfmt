@@ -58,9 +58,7 @@ pub(crate) fn check_one_file(
         }
 
         // Check spacing problems
-        for diagnostic in check_spacing(filename, line_no as u32, line) {
-            diagnostics.push(diagnostic);
-        }
+        diagnostics.append(&mut check_spacing(filename, line_no as u32, line));
     }
     Ok(diagnostics)
 }
