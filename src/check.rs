@@ -24,13 +24,16 @@ pub fn check_command<W: std::io::Write>(
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin().read_to_string(&mut content)?;
-        let diagnostic = check_one_file(None, config.max_width, content)?;
+        let diagnostic = check_one_file(None, config.max_width, &content)?;
         diagnostics.extend(diagnostic);
     } else {
         for filename in filenames {
             let content = fs::read_to_string(filename)?;
-            let diagnostics_ =
-                check_one_file(Some(&filename.to_string_lossy()), config.max_width, content)?;
+            let diagnostics_ = check_one_file(
+                Some(&filename.to_string_lossy()),
+                config.max_width,
+                &content,
+            )?;
             diagnostics.extend(diagnostics_);
         }
     }
@@ -43,7 +46,7 @@ pub fn check_command<W: std::io::Write>(
 pub(crate) fn check_one_file(
     filename: Option<&str>,
     max_width: u32,
-    content: String,
+    content: &str,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
     let breaker = LineBreaker::builder().max_width(max_width).build()?;
 

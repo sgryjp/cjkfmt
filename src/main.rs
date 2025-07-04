@@ -69,7 +69,7 @@ mod file_based_tests {
             .unwrap_or_else(|_| panic!("failed to read resource: {:?}", resource));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {:?}", resource));
-        let actual = check_one_file(Some(resource), test_case.config.max_width, test_case.input)
+        let actual = check_one_file(Some(resource), test_case.config.max_width, &test_case.input)
             .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
 
         for (i, diagnostic) in actual.iter().enumerate() {
@@ -85,7 +85,7 @@ mod file_based_tests {
         let test_case: FormatTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {:?}", resource));
         let mut actual: Vec<u8> = Vec::with_capacity(1024);
-        format_one_file(&mut actual, &test_case.config, test_case.input)
+        format_one_file(&mut actual, &test_case.config, &test_case.input)
             .unwrap_or_else(|_| panic!("failed on checking a file: {:?}", resource));
 
         assert_eq!(String::from_utf8_lossy(&actual), test_case.output);

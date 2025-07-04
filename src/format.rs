@@ -18,11 +18,11 @@ pub fn format_command<W: std::io::Write>(
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin().read_to_string(&mut content)?;
-        format_one_file(stdout, config, content)?;
+        format_one_file(stdout, config, &content)?;
     } else {
         for filename in filenames.iter() {
             let content = fs::read_to_string(filename)?;
-            format_one_file(stdout, config, content)?;
+            format_one_file(stdout, config, &content)?;
         }
     }
     Ok(())
@@ -31,7 +31,7 @@ pub fn format_command<W: std::io::Write>(
 pub(crate) fn format_one_file<W: std::io::Write>(
     stdout: &mut W,
     config: &Config,
-    content: String,
+    content: &str,
 ) -> Result<(), anyhow::Error> {
     let breaker = LineBreaker::builder().max_width(config.max_width).build()?;
     for line in content.split_inclusive('\n') {
