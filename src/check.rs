@@ -22,9 +22,9 @@ pub fn check_command<W: std::io::Write>(
 
     // Read content of the specified files or standard input
     if filenames.is_empty() {
-        let mut buf = String::with_capacity(1024);
-        stdin().read_to_string(&mut buf)?;
-        let diagnostic = check_one_file(None, config.max_width, buf)?;
+        let mut content = String::with_capacity(1024);
+        stdin().read_to_string(&mut content)?;
+        let diagnostic = check_one_file(None, config.max_width, content)?;
         diagnostics.extend(diagnostic);
     } else {
         for filename in filenames {
@@ -48,16 +48,16 @@ pub(crate) fn check_one_file(
     let breaker = LineBreaker::builder().max_width(max_width).build()?;
 
     let mut diagnostics = Vec::new();
-    for (line_no, line) in content.split_inclusive('\n').enumerate() {
+    for (line_index, line) in content.split_inclusive('\n').enumerate() {
         // TODO: Support CR only
 
         // Check line length problem
-        if let Some(diagnostic) = check_line_length(&breaker, filename, line_no as u32, line) {
+        if let Some(diagnostic) = check_line_length(&breaker, filename, line_index as u32, line) {
             diagnostics.push(diagnostic);
         }
 
         // Check spacing problems
-        diagnostics.append(&mut check_spacing(filename, line_no as u32, line));
+        diagnostics.append(&mut check_spacing(filename, line_index as u32, line));
     }
     Ok(diagnostics)
 }
@@ -65,7 +65,7 @@ pub(crate) fn check_one_file(
 fn check_line_length(
     breaker: &LineBreaker,
     filename: Option<&str>,
-    line_no: u32,
+    line_index: u32,
     line: &str,
 ) -> Option<Diagnostic> {
     let overflow_pos = match breaker.next_line_break(line) {
@@ -78,14 +78,14 @@ fn check_line_length(
         }
     };
     let (precedings, followings) = line.split_at(overflow_pos);
-    let column_no = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
-    let start = Position::new(line_no, column_no);
+    let column_index = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
+    let start = Position::new(line_index, column_index);
     let next_char_len = followings
         .graphemes(true)
         .next()
         .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
         .unwrap_or(0u32);
-    let end = Position::new(line_no, column_no + next_char_len);
+    let end = Position::new(line_index, column_index + next_char_len);
     Some(Diagnostic::new(
         filename,
         start,
@@ -95,11 +95,11 @@ fn check_line_length(
     ))
 }
 
-fn check_spacing(filename: Option<&str>, line_no: u32, line: &str) -> Vec<Diagnostic> {
+fn check_spacing(filename: Option<&str>, line_index: u32, line: &str) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     for i in search_possible_spacing_positions(line) {
         // Calculate number of characters from the beginning of the line
-        let col_no = line[..i].graphemes(true).fold(0u32, |acc, s| {
+        let column_index = line[..i].graphemes(true).fold(0u32, |acc, s| {
             acc + s.encode_utf16().fold(0u32, |acc, _| acc + 1)
         });
 
@@ -112,8 +112,8 @@ fn check_spacing(filename: Option<&str>, line_no: u32, line: &str) -> Vec<Diagno
 
         diagnostics.push(Diagnostic::new(
             filename,
-            Position::new(line_no, col_no),
-            Position::new(line_no, col_no + next_char_len),
+            Position::new(line_index, column_index),
+            Position::new(line_index, column_index + next_char_len),
             "W002".to_string(),
             "Possible spacing position found".to_string(),
         ));

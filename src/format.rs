@@ -16,9 +16,9 @@ pub fn format_command<W: std::io::Write>(
 ) -> anyhow::Result<()> {
     // Read content of the specified files or standard input
     if filenames.is_empty() {
-        let mut buf = String::with_capacity(1024);
-        stdin().read_to_string(&mut buf)?;
-        format_one_file(stdout, config, buf)?;
+        let mut content = String::with_capacity(1024);
+        stdin().read_to_string(&mut content)?;
+        format_one_file(stdout, config, content)?;
     } else {
         for filename in filenames.iter() {
             let content = fs::read_to_string(filename)?;
