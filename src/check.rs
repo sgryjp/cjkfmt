@@ -38,7 +38,7 @@ pub fn check_command<W: std::io::Write>(
         }
     }
     for diagnostic in diagnostics {
-        writeln!(stdout, "{}", diagnostic)?;
+        writeln!(stdout, "{diagnostic}")?;
     }
     Ok(())
 }

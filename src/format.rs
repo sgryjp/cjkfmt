@@ -48,12 +48,12 @@ pub(crate) fn format_one_file<W: std::io::Write>(
         {
             // Write the part before the wrap point
             let (before, after) = remainings.split_at(overflow_pos - adjustment);
-            writeln!(stdout, "{}", before)?;
+            writeln!(stdout, "{before}")?;
             remainings = after;
         }
 
         // Write any remaining part of the line after the last wrap point
-        write!(stdout, "{}", remainings)?;
+        write!(stdout, "{remainings}")?;
     }
     Ok(())
 }

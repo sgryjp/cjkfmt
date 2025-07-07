@@ -66,8 +66,7 @@ impl Display for Diagnostic {
         let message = tokens[4];
         write!(
             f,
-            "{}{colon}{}{colon}{}{colon} {} {}",
-            filename, line, column, code, message
+            "{filename}{colon}{line}{colon}{column}{colon} {code} {message}"
         )
     }
 }
