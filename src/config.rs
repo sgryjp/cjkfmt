@@ -10,6 +10,7 @@ use crate::args::Cli;
 
 /// The configuration for cjkfmt.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
     /// Maximum line width to allow. (default: 80)
     pub max_width: u32,

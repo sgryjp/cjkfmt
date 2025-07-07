@@ -49,7 +49,7 @@ mod file_based_tests {
     use crate::core::diagnostic::Diagnostic;
     use crate::format::format_one_file;
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Default, Debug, Deserialize)]
     struct CheckTestCase {
         config: Config,
         input: String,

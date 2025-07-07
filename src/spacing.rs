@@ -3,8 +3,10 @@ use crate::_log::test_log;
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum CharType {
     Cjk,
-    NonCjk,
+    Latin,
+    Digit,
     Space,
+    Other,
 }
 
 pub fn search_possible_spacing_positions(text: &str) -> Vec<usize> {
@@ -19,10 +21,14 @@ pub fn search_possible_spacing_positions(text: &str) -> Vec<usize> {
     for (index, curr_char) in char_iterator {
         // Check if this is a candidate position to insert a space
         let curr_type = char_type(curr_char);
-        if prev_type == CharType::Cjk && curr_type == CharType::NonCjk
-            || prev_type == CharType::NonCjk && curr_type == CharType::Cjk
-        {
-            indices.push(index);
+        match (prev_type, curr_type) {
+            (CharType::Cjk, CharType::Digit)
+            | (CharType::Cjk, CharType::Latin)
+            | (CharType::Digit, CharType::Cjk)
+            | (CharType::Latin, CharType::Cjk) => {
+                indices.push(index);
+            }
+            _ => {}
         }
         test_log!(
             "{:?}[{:2}] --> {:?} ({:?}, {:?})",
@@ -77,11 +83,48 @@ fn char_type(c: char) -> CharType {
         | '\u{AC00}'..='\u{D7AF}'
          => CharType::Cjk,
 
+        // Basic Latin : Uppercase letters
+        'A'..='Z'
+        // Basic Latin : Lowercase letters
+        | 'a'..='z'
+        // Latin-1 Supplement
+        | '\u{00C0}'..='\u{00FF}'
+        // Latin Extended-A
+        | '\u{0100}'..='\u{017F}'
+        // Latin Extended-B
+        | '\u{0180}'..='\u{024F}'
+        // Latin Extended Additional
+        | '\u{1E00}'..='\u{1EFF}'
+        // IPA Extensions
+        | '\u{0250}'..='\u{02AF}'
+        // Spacing Modifier Letters
+        | '\u{02B0}'..='\u{02FF}'
+        // Combining Diacritical Marks
+        | '\u{0300}'..='\u{036F}'
+        // Combining Diacritical Marks Extended
+        | '\u{1AB0}'..='\u{1AFF}'
+        // Combining Diacritical Marks Supplement
+        | '\u{1DC0}'..='\u{1DFF}'
+        // Latin Extended-C
+        | '\u{2C60}'..='\u{2C7F}'
+        // Latin Extended-D
+        | '\u{A720}'..='\u{A7FF}'
+        // Latin Extended-E
+        | '\u{AB30}'..='\u{AB6F}'
+        // Latin Extended-F
+        | '\u{10780}'..='\u{107BF}'
+        // Latin Extended-G
+        | '\u{1DF00}'..='\u{1DFFF}'
+        => CharType::Latin, // Basic Latin
+
+        // Half-width digits
+        '0'..='9' => CharType::Digit,
+
         // Whitespace characters
         ' ' | '\r' | '\n' => CharType::Space,
 
         // Other characters
-        _ => CharType::NonCjk,
+        _ => CharType::Other,
     }
 }
 
@@ -95,8 +138,8 @@ mod tests {
     fn test_char_type() {
         assert!(char_type('中') == CharType::Cjk);
         assert!(char_type('漢') == CharType::Cjk);
-        assert!(char_type('a') == CharType::NonCjk);
-        assert!(char_type('1') == CharType::NonCjk);
+        assert!(char_type('a') == CharType::Latin);
+        assert!(char_type('1') == CharType::Digit);
         assert!(char_type(' ') == CharType::Space);
     }
 
