@@ -13,6 +13,10 @@ pub struct Position {
 }
 
 impl Position {
+    /// Creates a new `Position` with the specified `line` and `column` numbers.
+    ///
+    /// Both `line` and `column` are zero-based indices.
+    /// The `column` represents the number of UTF-16 code units from the start of the line.
     pub fn new(line: u32, column: u32) -> Self {
         Self { line, column }
     }

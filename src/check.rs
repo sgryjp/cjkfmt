@@ -8,7 +8,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     config::Config,
-    core::{diagnostic::Diagnostic, position::Position},
+    core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, position::Position},
     line_break::{BreakPoint, LineBreaker},
     spacing::search_possible_spacing_positions,
 };
@@ -51,9 +51,7 @@ pub(crate) fn check_one_file(
     let breaker = LineBreaker::builder().max_width(max_width).build()?;
 
     let mut diagnostics = Vec::new();
-    for (line_index, line) in content.split_inclusive('\n').enumerate() {
-        // TODO: Support CR only
-
+    for (line_index, line) in content.lines_inclusive().enumerate() {
         // Check line length problem
         if let Some(diagnostic) = check_line_length(&breaker, filename, line_index as u32, line) {
             diagnostics.push(diagnostic);

@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     config::Config,
+    core::lines_inclusive::LinesInclusiveExt,
     line_break::{BreakPoint, LineBreaker},
 };
 
@@ -33,20 +34,26 @@ pub(crate) fn format_one_file<W: std::io::Write>(
     config: &Config,
     content: &str,
 ) -> Result<(), anyhow::Error> {
-    let breaker = LineBreaker::builder().max_width(config.max_width).build()?;
-    for line in content.split_inclusive('\n') {
-        // TODO: Support LF only EOL code
-        let mut substring = line;
+    let line_breaker = LineBreaker::builder().max_width(config.max_width).build()?;
+
+    // Iterate over each line in the input content, including line endings
+    for line in content.lines_inclusive() {
+        let mut remainings = line;
+
+        // Iterate over wrap points in the line
         while let BreakPoint::WrapPoint {
             overflow_pos,
             adjustment,
-        } = breaker.next_line_break(substring)
+        } = line_breaker.next_line_break(remainings)
         {
-            let (before, after) = substring.split_at(overflow_pos - adjustment);
+            // Write the part before the wrap point
+            let (before, after) = remainings.split_at(overflow_pos - adjustment);
             writeln!(stdout, "{}", before)?;
-            substring = after;
+            remainings = after;
         }
-        write!(stdout, "{}", substring)?;
+
+        // Write any remaining part of the line after the last wrap point
+        write!(stdout, "{}", remainings)?;
     }
     Ok(())
 }
