@@ -14,12 +14,20 @@ impl<'a> Iterator for LinesInclusive<'a> {
         // Yield next line with end-of-line code
         for i in self.index..self.text.len() {
             match (self.text.get(i..i + 1), self.text.get(i + 1..i + 2)) {
+                // CR+LF
                 (Some("\r"), Some("\n")) => {
                     let (start, end) = (self.index, i + 2);
                     self.index = end;
                     return Some(&self.text[start..end]);
                 }
-                (Some("\r"), Some(_)) | (Some("\n"), Some(_)) => {
+                // CR followed by a single byte character
+                (Some("\r"), Some(_))
+                // CR followed by a multi-byte character or end of text
+                | (Some("\r"), None)
+                // LF followed by a single byte character
+                | (Some("\n"), Some(_))
+                // LF followed by a multi-byte character or end of text
+                | (Some("\n"), None) => {
                     let (start, end) = (self.index, i + 1);
                     self.index = end;
                     return Some(&self.text[start..end]);
@@ -89,6 +97,16 @@ mod tests {
     #[case("a\rb", vec!["a\r", "b"])]
     #[case("a\r\nb", vec!["a\r\n", "b"])]
     fn test_lines_without_final_line_ending(#[case] input: &str, #[case] expected: Vec<&str>) {
+        assert_eq!(input.lines_inclusive().collect::<Vec<&str>>(), expected);
+    }
+
+    #[rstest]
+    #[case("a\r亜", vec!["a\r", "亜"])]
+    #[case("a\n亜", vec!["a\n", "亜"])]
+    fn test_line_endings_followed_by_a_multibyte_char(
+        #[case] input: &str,
+        #[case] expected: Vec<&str>,
+    ) {
         assert_eq!(input.lines_inclusive().collect::<Vec<&str>>(), expected);
     }
 }
