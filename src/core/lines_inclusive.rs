@@ -59,3 +59,36 @@ impl LinesInclusiveExt for str {
         LinesInclusive::new(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case("", vec![])]
+    #[case("\rb", vec!["\r", "b"])]
+    #[case("\nb", vec!["\n", "b"])]
+    #[case("\r\nb", vec!["\r\n", "b"])]
+    fn test_empty_line(#[case] input: &str, #[case] expected: Vec<&str>) {
+        assert_eq!(input.lines_inclusive().collect::<Vec<&str>>(), expected);
+    }
+
+    #[rstest]
+    #[case("a\n", vec!["a\n"])]
+    #[case("a\r", vec!["a\r"])]
+    #[case("a\r\n", vec!["a\r\n"])]
+    fn test_lines_with_final_line_ending(#[case] input: &str, #[case] expected: Vec<&str>) {
+        assert_eq!(input.lines_inclusive().collect::<Vec<&str>>(), expected);
+    }
+
+    #[rstest]
+    #[case("a", vec!["a"])]
+    #[case("a\nb", vec!["a\n", "b"])]
+    #[case("a\rb", vec!["a\r", "b"])]
+    #[case("a\r\nb", vec!["a\r\n", "b"])]
+    fn test_lines_without_final_line_ending(#[case] input: &str, #[case] expected: Vec<&str>) {
+        assert_eq!(input.lines_inclusive().collect::<Vec<&str>>(), expected);
+    }
+}
