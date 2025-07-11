@@ -1,3 +1,5 @@
+use unicode_general_category::{GeneralCategory, get_general_category};
+
 use crate::_log::test_log;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -81,7 +83,20 @@ fn char_type(c: char) -> CharType {
         | '\u{3100}'..='\u{312F}'
         // Hangul Syllables: U+AC00–U+D7AF
         | '\u{AC00}'..='\u{D7AF}'
-         => CharType::Cjk,
+        => {
+             match get_general_category(c) {
+                 // Exclude punctuation charactersØ
+                GeneralCategory::ClosePunctuation
+                | GeneralCategory::ConnectorPunctuation
+                | GeneralCategory::DashPunctuation
+                | GeneralCategory::FinalPunctuation
+                | GeneralCategory::InitialPunctuation
+                | GeneralCategory::OpenPunctuation
+                | GeneralCategory::OtherPunctuation
+                => CharType::Other,
+                _ => CharType::Cjk,
+            }
+        },
 
         // Basic Latin : Uppercase letters
         'A'..='Z'

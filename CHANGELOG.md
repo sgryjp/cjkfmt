@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fix
+
+- Do not recognize full-width punctuation marks as full-width characters
+
 ## v0.0.6 - 2025-07-09
 
 ### Added

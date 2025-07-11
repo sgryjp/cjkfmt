@@ -112,6 +112,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-generator",
+ "unicode-general-category",
  "unicode-linebreak",
  "unicode-segmentation",
  "unicode-width",
@@ -642,6 +643,12 @@ checksum = "e1b88fcfe09e89d3866a5c11019378088af2d24c3fbd4f0543f96b479ec90697"
 dependencies = [
  "version_check",
 ]
+
+[[package]]
+name = "unicode-general-category"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24adfe8311434967077a6adff125729161e6e4934d76f6b7c55318ac5c9246d3"
 
 [[package]]
 name = "unicode-ident"
