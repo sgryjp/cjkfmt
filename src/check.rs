@@ -24,16 +24,12 @@ pub fn check_command<W: std::io::Write>(
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin().read_to_string(&mut content)?;
-        let diagnostic = check_one_file(None, config.max_width, &content)?;
+        let diagnostic = check_one_file(config, None, &content)?;
         diagnostics.extend(diagnostic);
     } else {
         for filename in filenames {
             let content = fs::read_to_string(filename)?;
-            let diagnostics_ = check_one_file(
-                Some(&filename.to_string_lossy()),
-                config.max_width,
-                &content,
-            )?;
+            let diagnostics_ = check_one_file(config, Some(&filename.to_string_lossy()), &content)?;
             diagnostics.extend(diagnostics_);
         }
     }
@@ -44,11 +40,11 @@ pub fn check_command<W: std::io::Write>(
 }
 
 pub(crate) fn check_one_file(
+    config: &Config,
     filename: Option<&str>,
-    max_width: u32,
     content: &str,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
-    let breaker = LineBreaker::builder().max_width(max_width).build()?;
+    let breaker = LineBreaker::builder().max_width(config.max_width).build()?;
 
     let mut diagnostics = Vec::new();
     for (line_index, line) in content.lines_inclusive().enumerate() {
@@ -58,7 +54,12 @@ pub(crate) fn check_one_file(
         }
 
         // Check spacing problems
-        diagnostics.append(&mut check_spacing(filename, line_index as u32, line));
+        diagnostics.append(&mut check_spacing(
+            config,
+            filename,
+            line_index as u32,
+            line,
+        ));
     }
     Ok(diagnostics)
 }
@@ -96,9 +97,14 @@ fn check_line_length(
     ))
 }
 
-fn check_spacing(filename: Option<&str>, line_index: u32, line: &str) -> Vec<Diagnostic> {
+fn check_spacing(
+    config: &Config,
+    filename: Option<&str>,
+    line_index: u32,
+    line: &str,
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    for i in search_possible_spacing_positions(line) {
+    for i in search_possible_spacing_positions(config, line) {
         // Calculate number of characters from the beginning of the line
         let column_index = line[..i].graphemes(true).fold(0u32, |acc, s| {
             acc + s.encode_utf16().fold(0u32, |acc, _| acc + 1)

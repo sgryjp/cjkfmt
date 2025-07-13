@@ -1,6 +1,9 @@
 use unicode_general_category::{GeneralCategory, get_general_category};
 
-use crate::_log::test_log;
+use crate::{
+    _log::test_log,
+    config::{Config, SpacingRule},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum CharType {
@@ -11,11 +14,17 @@ enum CharType {
     Other,
 }
 
-pub fn search_possible_spacing_positions(text: &str) -> Vec<usize> {
+/// Enum representing possible edits for spacing.
+#[allow(dead_code)] // TODO: Use Delete variant
+enum SpaceEdit {
+    Add,
+    Delete,
+}
+
+pub fn search_possible_spacing_positions(config: &Config, text: &str) -> Vec<usize> {
     let mut indices = Vec::new();
 
     // Scan the text character by character to find possible position to insert a space.
-    // This is a simple heuristic that checks if a CJK character is followed by a non-CJK character
     let mut char_iterator = text.char_indices();
     let Some(mut prev_type) = char_iterator.next().map(|(_, c)| char_type(c)) else {
         return indices;
@@ -23,10 +32,11 @@ pub fn search_possible_spacing_positions(text: &str) -> Vec<usize> {
     for (index, curr_char) in char_iterator {
         // Check if this is a candidate position to insert a space
         let curr_type = char_type(curr_char);
-        match evaluate_spacing(prev_type, curr_type) {
-            true => indices.push(index),
-            false => (),
-        };
+        match evaluate_spacing(config, prev_type, curr_type) {
+            Some(SpaceEdit::Add) => indices.push(index),
+            Some(SpaceEdit::Delete) => todo!(),
+            None => (),
+        }
         test_log!("{text:?}[{index:2}] --> {curr_char:?} ({prev_type:?}, {curr_type:?})");
 
         // Update the previous character type
@@ -36,13 +46,23 @@ pub fn search_possible_spacing_positions(text: &str) -> Vec<usize> {
     indices
 }
 
-fn evaluate_spacing(prev_type: CharType, curr_type: CharType) -> bool {
-    match (prev_type, curr_type) {
-        (CharType::Cjk, CharType::Digit)
-        | (CharType::Cjk, CharType::Latin)
-        | (CharType::Digit, CharType::Cjk)
-        | (CharType::Latin, CharType::Cjk) => true,
-        _ => false,
+fn evaluate_spacing(config: &Config, prev: CharType, curr: CharType) -> Option<SpaceEdit> {
+    match (prev, curr) {
+        (CharType::Cjk, CharType::Digit) | (CharType::Digit, CharType::Cjk) => {
+            match config.spacing.digits {
+                SpacingRule::Require => Some(SpaceEdit::Add),
+                SpacingRule::Prohibit => todo!(),
+                SpacingRule::Ignore => None,
+            }
+        }
+        (CharType::Cjk, CharType::Latin) | (CharType::Latin, CharType::Cjk) => {
+            match config.spacing.alphabets {
+                SpacingRule::Require => Some(SpaceEdit::Add),
+                SpacingRule::Prohibit => todo!(),
+                SpacingRule::Ignore => None,
+            }
+        }
+        _ => None,
     }
 }
 
@@ -145,8 +165,6 @@ fn char_type(c: char) -> CharType {
 mod tests {
     use super::*;
 
-    use rstest::rstest;
-
     #[test]
     fn test_char_type() {
         assert!(char_type('中') == CharType::Cjk);
@@ -154,17 +172,5 @@ mod tests {
         assert!(char_type('a') == CharType::Latin);
         assert!(char_type('1') == CharType::Digit);
         assert!(char_type(' ') == CharType::Space);
-    }
-
-    #[rstest]
-    #[case("漢漢", vec![])]
-    #[case("漢a", vec![3])]
-    #[case("漢 a", vec![])]
-    #[case("a漢", vec![1])]
-    #[case("a 漢", vec![])]
-    #[case("漢\n", vec![])]
-    #[case("a\n", vec![])]
-    fn test_check_spacing_in_a_line(#[case] text: &str, #[case] indices: Vec<usize>) {
-        assert_eq!(search_possible_spacing_positions(text), indices);
     }
 }

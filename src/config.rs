@@ -14,6 +14,9 @@ use crate::args::Cli;
 pub struct Config {
     /// Maximum line width to allow. (default: 80)
     pub max_width: u32,
+
+    /// Rules for handling spaces between full-width and half-width characters.
+    pub spacing: SpacingConfig,
 }
 
 impl Config {
@@ -57,6 +60,47 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { max_width: 80 }
+        Config {
+            max_width: 80,
+            spacing: Default::default(),
+        }
+    }
+}
+
+/// Rules for handling spaces between full-width and half-width characters.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpacingRule {
+    /// Require a space between full-width and half-width characters.
+    Require,
+
+    /// Prohibit spaces between full-width and half-width characters.
+    Prohibit,
+
+    /// Do not care about spaces between full-width and half-width characters.
+    Ignore,
+}
+
+/// Configuration for spacing rules.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SpacingConfig {
+    /// How to handle spaces between full-width and half-width alphabets.
+    pub alphabets: SpacingRule,
+
+    /// How to handle spaces between full-width and half-width digits.
+    pub digits: SpacingRule,
+
+    /// Whether to treat full-width punctuation as full-width characters or not.
+    pub punctuation_as_fullwidth: bool, // TODO: Use punctuation_as_fullwidth setting
+}
+
+impl Default for SpacingConfig {
+    fn default() -> Self {
+        SpacingConfig {
+            alphabets: SpacingRule::Ignore,
+            digits: SpacingRule::Ignore,
+            punctuation_as_fullwidth: false,
+        }
     }
 }

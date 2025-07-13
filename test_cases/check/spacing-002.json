@@ -1,5 +1,9 @@
 {
-  "config": {},
+  "config": {
+    "spacing": {
+      "digits": "require"
+    }
+  },
   "input": "漢1",
   "diagnostics": [
     {

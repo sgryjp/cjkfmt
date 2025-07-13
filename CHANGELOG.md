@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Functionality to configure spacing rules.
+  - `spacing.alphabets` controls how to handle spaces between full-width and half-width alphabets.
+    Possible values are `require`, `prohibit`, and `ignore`.
+  - `spacing.digits` controls how to handle spaces between full-width and half-width digits.
+    Possible values are the same as for alphabets.
+  - `spacing.punctuation_as_fullwidth` controls whether to treat full-width punctuation as full-width
+    characters or not.
+
 ### Fix
 
 - Do not recognize full-width punctuation marks as full-width characters

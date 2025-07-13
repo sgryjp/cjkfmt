@@ -72,7 +72,7 @@ mod file_based_tests {
             .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-        let actual = check_one_file(Some(resource), test_case.config.max_width, &test_case.input)
+        let actual = check_one_file(&test_case.config, Some(resource), &test_case.input)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
 
         // Find the offset of the original input text in the test data
