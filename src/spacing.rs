@@ -23,29 +23,27 @@ pub fn search_possible_spacing_positions(text: &str) -> Vec<usize> {
     for (index, curr_char) in char_iterator {
         // Check if this is a candidate position to insert a space
         let curr_type = char_type(curr_char);
-        match (prev_type, curr_type) {
-            (CharType::Cjk, CharType::Digit)
-            | (CharType::Cjk, CharType::Latin)
-            | (CharType::Digit, CharType::Cjk)
-            | (CharType::Latin, CharType::Cjk) => {
-                indices.push(index);
-            }
-            _ => {}
-        }
-        test_log!(
-            "{:?}[{:2}] --> {:?} ({:?}, {:?})",
-            text,
-            index,
-            curr_char,
-            prev_type,
-            curr_type
-        );
+        match evaluate_spacing(prev_type, curr_type) {
+            true => indices.push(index),
+            false => (),
+        };
+        test_log!("{text:?}[{index:2}] --> {curr_char:?} ({prev_type:?}, {curr_type:?})");
 
         // Update the previous character type
         prev_type = curr_type;
     }
 
     indices
+}
+
+fn evaluate_spacing(prev_type: CharType, curr_type: CharType) -> bool {
+    match (prev_type, curr_type) {
+        (CharType::Cjk, CharType::Digit)
+        | (CharType::Cjk, CharType::Latin)
+        | (CharType::Digit, CharType::Cjk)
+        | (CharType::Latin, CharType::Cjk) => true,
+        _ => false,
+    }
 }
 
 fn char_type(c: char) -> CharType {
