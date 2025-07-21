@@ -1,6 +1,6 @@
 mod _log;
-mod args;
 mod check;
+mod cli;
 mod config;
 mod core;
 mod format;
@@ -12,7 +12,14 @@ use std::io::stdout;
 use anyhow::Context;
 use clap::Parser;
 
-use crate::{args::Cli, check::check_command, config::Config, format::format_command};
+use crate::{
+    cli::{
+        args::{self, Cli, ColorOutputMode},
+        check::check_command,
+        format::format_command,
+    },
+    config::Config,
+};
 
 fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
@@ -21,9 +28,9 @@ fn main() -> anyhow::Result<()> {
 
     // Control whether to colorize the output or not
     let condition = match args.color {
-        args::ColorOutputMode::Always => yansi::Condition::ALWAYS,
-        args::ColorOutputMode::Never => yansi::Condition::NEVER,
-        args::ColorOutputMode::Auto => yansi::Condition::TTY_AND_COLOR,
+        ColorOutputMode::Always => yansi::Condition::ALWAYS,
+        ColorOutputMode::Never => yansi::Condition::NEVER,
+        ColorOutputMode::Auto => yansi::Condition::TTY_AND_COLOR,
     };
     yansi::whenever(condition);
 
@@ -79,7 +86,7 @@ mod file_based_tests {
         let matched_input = Regex::new(r##""input"\s*:\s*"(.*)""##)
             .unwrap()
             .captures(&content)
-            .expect(format!("`input` field not found in the test data file: {resource}").as_str())
+            .unwrap_or_else(|| panic!("`input` field not found in the test data file: {resource}"))
             .get(1)
             .unwrap();
         let lines_preceding: Vec<(usize, &str)> = content[..matched_input.start()]
