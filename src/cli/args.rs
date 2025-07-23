@@ -12,7 +12,7 @@ pub enum ColorOutputMode {
 
 #[derive(Parser, Debug, Deserialize, Serialize)]
 #[command(version, about, long_about = None)]
-pub struct Cli {
+pub struct CliArgs {
     /// Check whether formatting is correct without modifying the files.
     #[arg(short, long, default_value = "false")]
     pub check: bool,
@@ -36,7 +36,7 @@ pub struct Cli {
     filenames: Vec<PathBuf>,
 }
 
-impl Cli {
+impl CliArgs {
     pub fn filenames(&self) -> Vec<&Path> {
         self.filenames
             .iter()

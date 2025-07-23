@@ -6,7 +6,7 @@ use figment::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::args::Cli;
+use crate::args::CliArgs;
 
 /// The configuration for cjkfmt.
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,7 +20,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_cli_args(args: &Cli) -> Result<Self, Box<figment::Error>> {
+    pub fn from_cli_args(args: &CliArgs) -> Result<Self, Box<figment::Error>> {
         // Resolve configuration directory.
         // XDG_CONFIG_HOME is used if set, otherwise defaults to $HOME.
         let config_home = env::var_os("XDG_CONFIG_HOME")

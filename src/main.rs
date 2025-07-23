@@ -14,7 +14,7 @@ use clap::Parser;
 
 use crate::{
     cli::{
-        args::{self, Cli, ColorOutputMode},
+        args::{self, CliArgs, ColorOutputMode},
         check::check_command,
         format::format_command,
     },
@@ -22,7 +22,7 @@ use crate::{
 };
 
 fn main() -> anyhow::Result<()> {
-    let args = Cli::parse();
+    let args = CliArgs::parse();
     let config = Config::from_cli_args(&args).with_context(|| "failed to parse configuration")?;
     let mut stdout = stdout();
 
