@@ -1,6 +1,13 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use clap::{Parser, ValueEnum};
+use figment::{
+    Profile, Provider,
+    value::{Dict, Map},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(ValueEnum, Debug, Clone, Deserialize, Serialize)]
@@ -34,6 +41,28 @@ pub struct CliArgs {
     /// File(s) to process.
     #[arg()]
     filenames: Vec<PathBuf>,
+}
+
+// Implementing the Provider trait for CliArgs to integrate with Figment
+impl Provider for CliArgs {
+    fn metadata(&self) -> figment::Metadata {
+        figment::Metadata::named("Command line arguments")
+    }
+
+    fn data(&self) -> Result<Map<Profile, Dict>, figment::Error> {
+        let mut dict = BTreeMap::new();
+        if let Some(max_width) = self.max_width {
+            dict.insert(
+                "max_width".to_string(),
+                figment::value::Value::from(max_width),
+            );
+        }
+
+        let mut map = BTreeMap::new();
+        map.insert(Profile::Default, dict);
+
+        Ok(map)
+    }
 }
 
 impl CliArgs {

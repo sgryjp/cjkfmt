@@ -26,9 +26,12 @@ impl Config {
         let config_home = env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
             .or_else(env::home_dir);
-        let user_config_path = config_home.map(|p| p.join(".cjkfmt.json"));
+        let user_config_path = config_home
+            .map(|p| p.join(".cjkfmt.json"))
+            .and_then(|p| if p.exists() { Some(p) } else { None });
 
         // Load configuration from various sources:
+        //
         // 1. Default values
         // 2. JSON file `.cjkfmt.json` at the user's configuration directory
         //    (`XDG_CONFIG_HOME` if set, otherwise `$HOME/.config`)
@@ -36,23 +39,11 @@ impl Config {
         // 4. Environment variables prefixed with `CJKFMT_`
         let config = Figment::new();
         let config = config.merge(Serialized::defaults(Config::default()));
-        let config = if let Some(path) = user_config_path {
-            if path.exists() {
-                config.merge(Json::file_exact(path))
-            } else {
-                config
-            }
-        } else {
-            config
-        };
+        let config = user_config_path.map_or(config.clone(), |p| config.merge(Json::file_exact(p)));
         let config = config.merge(Json::file(".cjkfmt.json"));
         let config = config.merge(Env::prefixed("CJKFMT_"));
-        let mut config: Self = config.extract()?;
-
-        // Override with command line arguments
-        if let Some(max_width) = args.max_width {
-            config.max_width = max_width;
-        }
+        let config = config.merge(args);
+        let config: Self = config.extract()?;
 
         Ok(config)
     }
