@@ -6,11 +6,11 @@ use std::{
 
 use crate::{check::check_one_file, config::Config};
 
-pub fn check_command<W: std::io::Write>(
-    stdout: &mut W,
-    config: &Config,
-    filenames: &[&Path],
-) -> anyhow::Result<()> {
+pub fn check_command<W, P>(stdout: &mut W, config: &Config, filenames: &[P]) -> anyhow::Result<()>
+where
+    W: std::io::Write,
+    P: AsRef<Path>,
+{
     let mut diagnostics = Vec::new();
 
     // Read content of the specified files or standard input
@@ -21,6 +21,7 @@ pub fn check_command<W: std::io::Write>(
         diagnostics.extend(diagnostic);
     } else {
         for filename in filenames {
+            let filename = filename.as_ref();
             let content = fs::read_to_string(filename)?;
             let diagnostics_ = check_one_file(config, Some(&filename.to_string_lossy()), &content)?;
             diagnostics.extend(diagnostics_);

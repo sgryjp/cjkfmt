@@ -6,10 +6,10 @@ use std::{
 
 use crate::{config::Config, format::format_one_file};
 
-pub fn format_command<W: std::io::Write>(
+pub fn format_command<W: std::io::Write, P: AsRef<Path>>(
     stdout: &mut W,
     config: &Config,
-    filenames: &[&Path],
+    filenames: &[P],
 ) -> anyhow::Result<()> {
     // Read content of the specified files or standard input
     if filenames.is_empty() {
@@ -17,7 +17,7 @@ pub fn format_command<W: std::io::Write>(
         stdin().read_to_string(&mut content)?;
         format_one_file(stdout, config, &content)?;
     } else {
-        for filename in filenames.iter() {
+        for filename in filenames {
             let content = fs::read_to_string(filename)?;
             format_one_file(stdout, config, &content)?;
         }

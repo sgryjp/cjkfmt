@@ -1,9 +1,6 @@
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use figment::{
     Profile, Provider,
     value::{Dict, Map},
@@ -20,10 +17,6 @@ pub enum ColorOutputMode {
 #[derive(Parser, Debug, Deserialize, Serialize)]
 #[command(version, about, long_about = None)]
 pub struct CliArgs {
-    /// Check whether formatting is correct without modifying the files.
-    #[arg(short, long, default_value = "false")]
-    pub check: bool,
-
     /// Control whether to colorize the output.
     ///
     /// When set to `always`, cjkfmt will always produce colorized output. When set
@@ -38,9 +31,8 @@ pub struct CliArgs {
     #[arg(short, long)]
     pub max_width: Option<u32>,
 
-    /// File(s) to process.
-    #[arg()]
-    filenames: Vec<PathBuf>,
+    #[command(subcommand)]
+    pub command: Commands,
 }
 
 // Implementing the Provider trait for CliArgs to integrate with Figment
@@ -65,11 +57,19 @@ impl Provider for CliArgs {
     }
 }
 
-impl CliArgs {
-    pub fn filenames(&self) -> Vec<&Path> {
-        self.filenames
-            .iter()
-            .map(|p| p.as_path())
-            .collect::<Vec<&Path>>()
-    }
+#[derive(Subcommand, Debug, Deserialize, Serialize)]
+pub enum Commands {
+    /// Format files according to CJK text formatting rules.
+    Format {
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
+
+    /// Check whether formatting is correct without modifying the files.
+    Check {
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
 }

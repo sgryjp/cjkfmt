@@ -34,10 +34,13 @@ fn main() -> anyhow::Result<()> {
     };
     yansi::whenever(condition);
 
-    if args.check {
-        check_command(&mut stdout, &config, &args.filenames())?
-    } else {
-        format_command(&mut stdout, &config, &args.filenames())?
+    match args.command {
+        args::Commands::Check { filenames } => {
+            check_command(&mut stdout, &config, filenames.as_slice())?
+        }
+        args::Commands::Format { filenames } => {
+            format_command(&mut stdout, &config, filenames.as_slice())?
+        }
     }
 
     Ok(())
