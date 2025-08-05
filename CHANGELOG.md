@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v0.0.7 - 2025-08-05
+
 ### Added
 
 - Added functionality to configure how characters in the Ambiguous category are treated:
