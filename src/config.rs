@@ -12,7 +12,10 @@ use crate::args::CliArgs;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Maximum line width to allow. (default: 80)
+    /// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
+    pub ambiguous_width: AmbiguousWidth,
+
+    /// Maximum line width to allow. (dfault: 80)
     pub max_width: u32,
 
     /// Rules for handling spaces between full-width and half-width characters.
@@ -52,6 +55,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            ambiguous_width: AmbiguousWidth::Wide,
             max_width: 80,
             spacing: Default::default(),
         }
@@ -94,4 +98,16 @@ impl Default for SpacingConfig {
             punctuation_as_fullwidth: false,
         }
     }
+}
+
+/// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AmbiguousWidth {
+    /// Treat characters in the Ambiguous category as 1.
+    #[serde(alias = "Halfwidth")]
+    Narrow,
+
+    /// Treat characters in the Ambiguous category as 2.
+    #[serde(alias = "Fullwidth")]
+    Wide,
 }

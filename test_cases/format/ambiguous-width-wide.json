@@ -1,0 +1,8 @@
+{
+  "config": {
+    "ambiguous_width": "Wide",
+    "max_width": 17
+  },
+  "input": "※East Asian WidthプロパティがAmbiguous",
+  "output": "※East Asian \nWidthプロパティが\nAmbiguous"
+}

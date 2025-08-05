@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added functionality to configure how characters in the Ambiguous category are treated: as either narrow (half-width) or wide (full-width).
+  - cjkfmt follows the East Asian Width property as specified in Unicode Annex #11, using the [`unicode-width`](https://crates.io/crates/unicode-width) crate.
+
 - Functionality to configure spacing rules.
   - `spacing.alphabets` controls how to handle spaces between full-width and half-width alphabets.
     Possible values are `require`, `prohibit`, and `ignore`.

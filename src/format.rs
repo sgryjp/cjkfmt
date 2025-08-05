@@ -9,7 +9,10 @@ pub(crate) fn format_one_file<W: std::io::Write>(
     config: &Config,
     content: &str,
 ) -> Result<(), anyhow::Error> {
-    let line_breaker = LineBreaker::builder().max_width(config.max_width).build()?;
+    let line_breaker = LineBreaker::builder()
+        .ambiguous_width(config.ambiguous_width)
+        .max_width(config.max_width)
+        .build()?;
 
     // Iterate over each line in the input content, including line endings
     for line in content.lines_inclusive() {
