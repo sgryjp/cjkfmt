@@ -3,7 +3,7 @@ use unicode_linebreak::{BreakClass, break_property};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::_log::test_log;
+use crate::{_log::test_log, config::AmbiguousWidth};
 
 /// Grapheme clusters prohibited at the start of a line.
 pub const PROHIBITED_START: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
@@ -44,6 +44,7 @@ pub enum BreakPoint {
 /// Use [`LineBreaker::builder`] to create a new instance of [`LineBreaker`].
 #[derive(Debug)]
 pub struct LineBreaker {
+    ambiguous_width: AmbiguousWidth,
     max_width: u32,
     prohibited_start: Vec<String>,
     prohibited_end: Vec<String>,
@@ -55,6 +56,15 @@ pub struct LineBreakerBuilder {
 }
 
 impl LineBreakerBuilder {
+    /// Sets how to treat width of characters in the Ambiguous category.
+    ///
+    /// The width is measured in terms of fullwidth characters.
+    /// For example, the width of "あ" is 2, and the width of "a" is 1.
+    pub fn ambiguous_width(mut self, ambiguous_width: AmbiguousWidth) -> Self {
+        self.line_breaker.ambiguous_width = ambiguous_width;
+        self
+    }
+
     /// Sets the maximum width of a line.
     ///
     /// The width is measured in terms of fullwidth characters.
@@ -106,6 +116,7 @@ impl LineBreaker {
     pub fn builder() -> LineBreakerBuilder {
         LineBreakerBuilder {
             line_breaker: LineBreaker {
+                ambiguous_width: AmbiguousWidth::Wide,
                 max_width: 80,
                 prohibited_start: Vec::new(),
                 prohibited_end: Vec::new(),
@@ -115,6 +126,7 @@ impl LineBreaker {
         .prohibited_end(PROHIBITED_END)
     }
 
+    /// Returns how to treat width of characters in the Ambiguous category.
     /// Returns the maximum width of a line.
     pub fn max_width(&self) -> u32 {
         self.max_width
@@ -152,9 +164,18 @@ impl LineBreaker {
             }
 
             // Test whether rendering this grapheme cluster will exceed the limit or not
-            let width = grapheme.width_cjk() as u32;
+            let width = if self.ambiguous_width == AmbiguousWidth::Narrow {
+                grapheme.width()
+            } else {
+                grapheme.width_cjk()
+            } as u32;
             if self.max_width < acc_width + width {
-                test_log!("  {i:02} {:?} !!", grapheme);
+                test_log!(
+                    "  {i:02} {:?} # max_width < acc_width + width ({} < {})",
+                    grapheme,
+                    self.max_width,
+                    acc_width + width
+                );
                 if let Some(nbytes_seek_back) =
                     self.num_bytes_to_seek_back(graphemes.as_slice(), grapheme)
                 {
@@ -172,7 +193,10 @@ impl LineBreaker {
             }
 
             // Go to next grapheme cluster
-            test_log!("  {i:02} {:?}", grapheme);
+            test_log!(
+                "  {i:03} {grapheme:?} (acc_width+{width}: {})",
+                acc_width + width
+            );
             graphemes.push(grapheme);
             acc_width += width;
         }
@@ -279,6 +303,45 @@ mod test {
         #[case] expected: bool,
     ) {
         assert_eq!(is_breakable(preceding, following), expected);
+    }
+
+    #[test]
+    fn test_ambiguous_width() {
+        for ambiguous_width in [AmbiguousWidth::Wide, AmbiguousWidth::Narrow] {
+            let line_breaker = LineBreaker::builder()
+                .ambiguous_width(ambiguous_width)
+                .max_width(2)
+                .build()
+                .unwrap();
+
+            assert_eq!(
+                line_breaker.next_line_break("1a1a\n"),
+                BreakPoint::WrapPoint {
+                    overflow_pos: 2,
+                    adjustment: 0
+                },
+            );
+            assert_eq!(
+                line_breaker.next_line_break("あa1a\n"),
+                BreakPoint::WrapPoint {
+                    overflow_pos: 3,
+                    adjustment: 0
+                },
+            );
+            assert_eq!(
+                line_breaker.next_line_break("※a1a\n"),
+                BreakPoint::WrapPoint {
+                    overflow_pos: match ambiguous_width {
+                        AmbiguousWidth::Narrow => 4,
+                        AmbiguousWidth::Wide => 3,
+                    },
+                    adjustment: 0
+                },
+            );
+        }
+        assert!(LineBreaker::builder().max_width(1).build().is_err());
+        assert!(LineBreaker::builder().max_width(2).build().is_ok());
+        assert!(LineBreaker::builder().max_width(3).build().is_ok());
     }
 
     #[test]

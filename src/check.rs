@@ -12,7 +12,10 @@ pub(crate) fn check_one_file(
     filename: Option<&str>,
     content: &str,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
-    let breaker = LineBreaker::builder().max_width(config.max_width).build()?;
+    let breaker = LineBreaker::builder()
+        .ambiguous_width(config.ambiguous_width)
+        .max_width(config.max_width)
+        .build()?;
 
     let mut diagnostics = Vec::new();
     for (line_index, line) in content.lines_inclusive().enumerate() {
