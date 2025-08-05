@@ -15,7 +15,7 @@ pub struct Config {
     /// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
     pub ambiguous_width: AmbiguousWidth,
 
-    /// Maximum line width to allow. (dfault: 80)
+    /// Maximum line width to allow. (default: 80)
     pub max_width: u32,
 
     /// Rules for handling spaces between full-width and half-width characters.
