@@ -127,11 +127,6 @@ impl LineBreaker {
     }
 
     /// Returns how to treat width of characters in the Ambiguous category.
-    #[allow(dead_code)]
-    pub fn ambiguous_width(&self) -> AmbiguousWidth {
-        self.ambiguous_width
-    }
-
     /// Returns the maximum width of a line.
     pub fn max_width(&self) -> u32 {
         self.max_width
