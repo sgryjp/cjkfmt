@@ -1,7 +1,7 @@
 //! The [`Diagnostic`] type for storing diagnostic information.
 use serde::{Deserialize, Serialize};
 
-use crate::core::position::Position;
+use crate::position::Position;
 
 /// Diagnostic information for a single issue.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

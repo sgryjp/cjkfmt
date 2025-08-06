@@ -1,6 +1,7 @@
+use cjkfmt_core::lines_inclusive::LinesInclusiveExt;
+
 use crate::{
     config::Config,
-    core::lines_inclusive::LinesInclusiveExt,
     line_break::{BreakPoint, LineBreaker},
 };
 

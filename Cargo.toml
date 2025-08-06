@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["cjkfmt-cli"]
+members = ["cjkfmt-cli", "cjkfmt-core"]
 
 [workspace.package]
 version = "0.0.7"
@@ -9,3 +9,7 @@ authors = ["Suguru Yamamoto <sgryjp@gmail.com>"]
 description = "Formatter for CJK text files"
 repository = "https://github.com/sgryjp/cjkfmt"
 license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+rstest = "0.25.0"

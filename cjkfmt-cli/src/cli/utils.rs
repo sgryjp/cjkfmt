@@ -1,6 +1,5 @@
+use cjkfmt_core::diagnostic::Diagnostic;
 use yansi::Paint;
-
-use crate::core::diagnostic::Diagnostic;
 
 /// Returns a printable string representation of the diagnostic.
 pub fn format_diagnostic(diagnostic: &Diagnostic) -> String {

@@ -2,7 +2,6 @@ mod _log;
 mod check;
 mod cli;
 mod config;
-mod core;
 mod format;
 mod line_break;
 mod spacing;
@@ -50,6 +49,8 @@ fn main() -> anyhow::Result<()> {
 mod file_based_tests {
     use super::*;
 
+    use cjkfmt_core::diagnostic::Diagnostic;
+    use cjkfmt_core::position::Position;
     use regex::Regex;
     use serde::Deserialize;
     use serde_json::{self};
@@ -58,8 +59,6 @@ mod file_based_tests {
     use crate::_log::test_log;
     use crate::check::check_one_file;
     use crate::cli::utils::format_diagnostic;
-    use crate::core::diagnostic::Diagnostic;
-    use crate::core::position::Position;
     use crate::format::format_one_file;
 
     #[derive(Default, Debug, Deserialize)]
