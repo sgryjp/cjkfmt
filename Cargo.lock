@@ -95,10 +95,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268"
 
 [[package]]
-name = "cjkfmt"
+name = "cjkfmt-cli"
 version = "0.0.7"
 dependencies = [
  "anyhow",
+ "cjkfmt-core",
  "clap",
  "figment",
  "home",
@@ -112,6 +113,14 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
  "yansi",
+]
+
+[[package]]
+name = "cjkfmt-core"
+version = "0.0.7"
+dependencies = [
+ "rstest",
+ "serde",
 ]
 
 [[package]]

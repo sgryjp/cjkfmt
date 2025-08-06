@@ -1,10 +1,7 @@
 //! The [`Diagnostic`] type for storing diagnostic information.
-use core::fmt::Display;
-
 use serde::{Deserialize, Serialize};
-use yansi::Paint;
 
-use crate::core::position::Position;
+use crate::position::Position;
 
 /// Diagnostic information for a single issue.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,33 +37,5 @@ impl Diagnostic {
             code,
             message,
         }
-    }
-}
-
-impl Display for Diagnostic {
-    /// Formats the diagnostic information into a human-readable string.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let filename = self.filename.as_deref().unwrap_or("<stdin>");
-        let line = self.start.line;
-        let column = self.start.column;
-        let buf = format!(
-            "{}\0{}\0{}\0{}\0{}",
-            filename,
-            line + 1,
-            column + 1,
-            self.code,
-            self.message
-        );
-        let tokens: Vec<&str> = buf.split('\0').collect();
-        let colon = ":".cyan();
-        let filename = tokens[0].white().bold();
-        let line = tokens[1];
-        let column = tokens[2];
-        let code = tokens[3].yellow();
-        let message = tokens[4];
-        write!(
-            f,
-            "{filename}{colon}{line}{colon}{column}{colon} {code} {message}"
-        )
     }
 }

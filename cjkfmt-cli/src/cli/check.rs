@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use crate::{check::check_one_file, config::Config};
+use crate::{check::check_one_file, cli::utils::format_diagnostic, config::Config};
 
 pub fn check_command<W, P>(stdout: &mut W, config: &Config, filenames: &[P]) -> anyhow::Result<()>
 where
@@ -28,7 +28,7 @@ where
         }
     }
     for diagnostic in diagnostics {
-        writeln!(stdout, "{diagnostic}")?;
+        writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
     }
     Ok(())
 }

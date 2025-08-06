@@ -2,7 +2,7 @@
 ///
 /// The difference from `str::lines` is that line terminators are included
 /// in the lines returned by the iterator.
-pub(crate) struct LinesInclusive<'a> {
+pub struct LinesInclusive<'a> {
     index: usize,
     text: &'a str,
 }

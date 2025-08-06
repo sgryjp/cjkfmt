@@ -1,8 +1,8 @@
+use cjkfmt_core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, position::Position};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     config::Config,
-    core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, position::Position},
     line_break::{BreakPoint, LineBreaker},
     spacing::search_possible_spacing_positions,
 };

@@ -2,7 +2,6 @@ mod _log;
 mod check;
 mod cli;
 mod config;
-mod core;
 mod format;
 mod line_break;
 mod spacing;
@@ -50,6 +49,8 @@ fn main() -> anyhow::Result<()> {
 mod file_based_tests {
     use super::*;
 
+    use cjkfmt_core::diagnostic::Diagnostic;
+    use cjkfmt_core::position::Position;
     use regex::Regex;
     use serde::Deserialize;
     use serde_json::{self};
@@ -57,8 +58,7 @@ mod file_based_tests {
 
     use crate::_log::test_log;
     use crate::check::check_one_file;
-    use crate::core::diagnostic::Diagnostic;
-    use crate::core::position::Position;
+    use crate::cli::utils::format_diagnostic;
     use crate::format::format_one_file;
 
     #[derive(Default, Debug, Deserialize)]
@@ -75,11 +75,13 @@ mod file_based_tests {
         output: String,
     }
 
-    #[test_resources("test_cases/check/*.json")]
+    #[test_resources("cjkfmt-cli/test_cases/check/*.json")]
     fn check(resource: &str) {
         // Load the test case from the JSON file
-        let content = std::fs::read_to_string(resource)
-            .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
+        let content = std::fs::read_to_string(
+            resource.strip_prefix("cjkfmt-cli/").unwrap(), // Removing as test runs in subcrate's dir
+        )
+        .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
         let actual = check_one_file(&test_case.config, Some(resource), &test_case.input)
@@ -114,16 +116,22 @@ mod file_based_tests {
                 diagnostic.code.clone(),
                 diagnostic.message.clone(),
             );
-            test_log!("diagnostics[{:2}] = {}", i, diagnostic);
+            let formatted = format_diagnostic(&diagnostic);
+            test_log!("diagnostics[{i:2}] = {formatted}");
         }
-        assert_eq!(actual, test_case.diagnostics);
+        actual
+            .iter()
+            .zip(&test_case.diagnostics)
+            .for_each(|(a, e)| assert_diagnostics_are_equal(a, e));
     }
 
-    #[test_resources("test_cases/format/*.json")]
+    #[test_resources("cjkfmt-cli/test_cases/format/*.json")]
     fn format(resource: &str) {
         // Load the test case from the JSON file
-        let content = std::fs::read_to_string(resource)
-            .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
+        let content = std::fs::read_to_string(
+            resource.strip_prefix("cjkfmt-cli/").unwrap(), // Removing as test runs in subcrate's dir
+        )
+        .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: FormatTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
 
@@ -136,5 +144,30 @@ mod file_based_tests {
 
         // Compare the actual output with the expected output
         assert_eq!(String::from_utf8_lossy(&actual), test_case.output);
+    }
+
+    fn assert_diagnostics_are_equal(a: &Diagnostic, b: &Diagnostic) {
+        match (&a.filename, &b.filename) {
+            (Some(f1), Some(f2)) => {
+                // Check whether the longer one ends with the shorter one
+                // so that the difference of working directory are ignored.
+                if f1.len() < f2.len() {
+                    assert!(
+                        f2.ends_with(f1),
+                        "filename does not match: {f1:?} and {f2:?}"
+                    );
+                } else {
+                    assert!(
+                        f1.ends_with(f2),
+                        "filename does not match: {f1:?} and {f2:?}"
+                    );
+                }
+            }
+            (f1, f2) => assert_eq!(f1, f2),
+        };
+        assert_eq!(a.start, b.start);
+        assert_eq!(a.end, b.end);
+        assert_eq!(a.code, b.code);
+        assert_eq!(a.message, b.message);
     }
 }
