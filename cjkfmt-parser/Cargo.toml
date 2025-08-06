@@ -1,0 +1,16 @@
+[package]
+name = "cjkfmt-parser"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror = "2.0.12"
+tree-sitter = "0.25.8"
+
+[build-dependencies]
+cc = "1.2.31"
+url = "2.5.4"

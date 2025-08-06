@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.97"
 cjkfmt-core = { path = "../cjkfmt-core" }
+cjkfmt-parser = { path = "../cjkfmt-parser" }
 clap = { version = "4.5.41", features = ["cargo", "derive", "wrap_help"] }
 figment = { version = "0.10.19", features = ["env", "json"] }
 home = "0.5.11"

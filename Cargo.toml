@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["cjkfmt-cli", "cjkfmt-core"]
+members = ["cjkfmt-cli", "cjkfmt-core", "cjkfmt-parser"]
 
 [workspace.package]
 version = "0.0.7"
