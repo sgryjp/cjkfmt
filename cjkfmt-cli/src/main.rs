@@ -57,6 +57,7 @@ mod file_based_tests {
 
     use crate::_log::test_log;
     use crate::check::check_one_file;
+    use crate::cli::utils::format_diagnostic;
     use crate::core::diagnostic::Diagnostic;
     use crate::core::position::Position;
     use crate::format::format_one_file;
@@ -116,7 +117,8 @@ mod file_based_tests {
                 diagnostic.code.clone(),
                 diagnostic.message.clone(),
             );
-            test_log!("diagnostics[{:2}] = {}", i, diagnostic);
+            let formatted = format_diagnostic(&diagnostic);
+            test_log!("diagnostics[{i:2}] = {formatted}");
         }
         actual
             .iter()
