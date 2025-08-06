@@ -1,11 +1,11 @@
 [package]
 name = "cjkfmt-cli"
-version = "0.0.7"
-edition = "2024"
-authors = ["Suguru Yamamoto <sgryjp@gmail.com>"]
-description = "Formatter for CJK text files"
-repository = "https://github.com/sgryjp/cjkfmt"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [[bin]]
 name = "cjkfmt"
