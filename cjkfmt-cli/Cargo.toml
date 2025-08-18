@@ -12,9 +12,9 @@ name = "cjkfmt"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.97"
+anyhow = "1.0.99"
 cjkfmt-core = { path = "../cjkfmt-core" }
-clap = { version = "4.5.41", features = ["cargo", "derive", "wrap_help"] }
+clap = { version = "4.5.45", features = ["cargo", "derive", "wrap_help"] }
 figment = { version = "0.10.19", features = ["env", "json"] }
 home = "0.5.11"
 serde.workspace = true
