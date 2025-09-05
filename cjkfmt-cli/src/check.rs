@@ -3,14 +3,14 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     config::Config,
+    document::Document,
     line_break::{BreakPoint, LineBreaker},
     spacing::search_possible_spacing_positions,
 };
 
 pub(crate) fn check_one_file(
     config: &Config,
-    filename: Option<&str>,
-    content: &str,
+    document: &Document,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
     let breaker = LineBreaker::builder()
         .ambiguous_width(config.ambiguous_width)
@@ -18,16 +18,16 @@ pub(crate) fn check_one_file(
         .build()?;
 
     let mut diagnostics = Vec::new();
-    for (line_index, line) in content.lines_inclusive().enumerate() {
+    for (line_index, line) in document.content.lines_inclusive().enumerate() {
         // Check line length problem
-        if let Some(diagnostic) = check_line_length(&breaker, filename, line_index as u32, line) {
+        if let Some(diagnostic) = check_line_length(&breaker, document, line_index as u32, line) {
             diagnostics.push(diagnostic);
         }
 
         // Check spacing problems
         diagnostics.append(&mut check_spacing(
             config,
-            filename,
+            document,
             line_index as u32,
             line,
         ));
@@ -37,7 +37,7 @@ pub(crate) fn check_one_file(
 
 fn check_line_length(
     breaker: &LineBreaker,
-    filename: Option<&str>,
+    document: &Document,
     line_index: u32,
     line: &str,
 ) -> Option<Diagnostic> {
@@ -60,7 +60,7 @@ fn check_line_length(
         .unwrap_or(0u32);
     let end = Position::new(line_index, column_index + next_char_len);
     Some(Diagnostic::new(
-        filename,
+        document.filename.as_deref(),
         start,
         end,
         "W001".to_string(),
@@ -70,7 +70,7 @@ fn check_line_length(
 
 fn check_spacing(
     config: &Config,
-    filename: Option<&str>,
+    document: &Document,
     line_index: u32,
     line: &str,
 ) -> Vec<Diagnostic> {
@@ -89,7 +89,7 @@ fn check_spacing(
             .unwrap_or(0u32);
 
         diagnostics.push(Diagnostic::new(
-            filename,
+            document.filename.as_deref(),
             Position::new(line_index, column_index),
             Position::new(line_index, column_index + next_char_len),
             "W002".to_string(),
