@@ -118,6 +118,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-generator",
+ "tree-sitter",
  "unicode-general-category",
  "unicode-linebreak",
  "unicode-segmentation",

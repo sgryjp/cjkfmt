@@ -19,6 +19,7 @@ clap = { version = "4.5.41", features = ["cargo", "derive", "wrap_help"] }
 figment = { version = "0.10.19", features = ["env", "json"] }
 home = "0.5.11"
 serde.workspace = true
+tree-sitter.workspace = true
 unicode-general-category = "1.0.0"
 unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.12.0"

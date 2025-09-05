@@ -52,6 +52,7 @@ mod file_based_tests {
 
     use cjkfmt_core::diagnostic::Diagnostic;
     use cjkfmt_core::position::Position;
+    use cjkfmt_parser::Grammar;
     use regex::Regex;
     use serde::Deserialize;
     use serde_json::{self};
@@ -86,7 +87,7 @@ mod file_based_tests {
         .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-        let document = Document::new(&test_case.input, Some(resource));
+        let document = Document::new(&test_case.input, Grammar::Json, Some(resource));
         let actual = check_one_file(&test_case.config, &document)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
 
