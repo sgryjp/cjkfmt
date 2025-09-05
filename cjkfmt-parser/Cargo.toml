@@ -9,7 +9,7 @@ license.workspace = true
 
 [dependencies]
 thiserror = "2.0.12"
-tree-sitter = "0.25.8"
+tree-sitter.workspace = true
 
 [build-dependencies]
 cc = "1.2.31"
