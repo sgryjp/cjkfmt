@@ -1,0 +1,11 @@
+### Motivation
+The current dependency `test_generator` does not support cargo workspace well. To address this limitation, we propose migrating to `datatest-stable`, which provides better support for cargo workspaces.
+
+### Proposed Actions
+1. Replace `test_generator` with `datatest-stable`.
+2. Update existing test configurations to work with `datatest-stable`.
+3. Ensure all tests continue to pass after the migration.
+
+### Benefits
+- Improved support for cargo workspace.
+- Easier management and execution of tests across the project.
