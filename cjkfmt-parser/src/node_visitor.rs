@@ -182,11 +182,7 @@ mod tests {
         assert!(
             num_different.iter().all(|n| n.is_none()),
             "UNMATCHED LINES: {:?}",
-            num_different
-                .iter()
-                .filter(|n| n.is_some())
-                .map(|n| n.unwrap())
-                .collect::<Vec<usize>>(),
+            num_different.into_iter().flatten().collect::<Vec<usize>>(),
         );
     }
 }

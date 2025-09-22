@@ -148,6 +148,7 @@ impl LineBreaker {
     }
 
     /// Finds a line break in the given line and returns its byte index.
+    #[allow(clippy::collapsible_if)]
     pub fn next_line_break(&self, line: &str) -> BreakPoint {
         test_log!("next_line_break() {:?}", line);
 
