@@ -32,7 +32,7 @@ impl Document {
     /// * `content` - The content of the document.
     /// * `grammar` - The grammar (programming language) of the document.
     /// * `filename` - The optional name of the file from which the content was read.
-    ///                None if the content was read from stdin.
+    ///   None if the content was read from stdin.
     pub fn new<S1: Into<String>, S2: Into<String>>(
         content: S1,
         grammar: Grammar,
@@ -48,9 +48,10 @@ impl Document {
 
     /// Parses the document.
     pub fn parse(&mut self) -> Result<(), CjkfmtParseError> {
-        parse(self.grammar, &self.content).and_then(|tree| {
-            self.tree = Some(tree);
-            Ok(())
-        })
+        parse(self.grammar, &self.content).map(|tree| self.tree = Some(tree))
+    }
+
+    pub fn tree(&self) -> Option<&Tree> {
+        self.tree.as_ref()
     }
 }

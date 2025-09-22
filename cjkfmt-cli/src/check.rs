@@ -1,37 +1,43 @@
 use cjkfmt_core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, position::Position};
+use cjkfmt_parser::NodeVisitor;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     config::Config,
     document::Document,
     line_break::{BreakPoint, LineBreaker},
-    spacing::search_possible_spacing_positions,
+    spacing_checker::SpacingChecker,
 };
 
 pub(crate) fn check_one_file(
     config: &Config,
     document: &Document,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
+    let mut diagnostics = Vec::new();
+
+    // Make sure the document was already parsed.
+    let Some(tree) = document.tree() else {
+        anyhow::bail!("the document passed to check_one_file does not have CST.");
+    };
+
+    // Initialize required components
     let breaker = LineBreaker::builder()
         .ambiguous_width(config.ambiguous_width)
         .max_width(config.max_width)
         .build()?;
 
-    let mut diagnostics = Vec::new();
+    // Check line length problems
     for (line_index, line) in document.content.lines_inclusive().enumerate() {
-        // Check line length problem
         if let Some(diagnostic) = check_line_length(&breaker, document, line_index as u32, line) {
             diagnostics.push(diagnostic);
         }
-
-        // Check spacing problems
-        diagnostics.append(&mut check_spacing(
-            config,
-            document,
-            line_index as u32,
-            line,
-        ));
     }
+
+    // Check spacing problems
+    let mut spacing_checker = SpacingChecker::new(config, document);
+    spacing_checker.walk(tree);
+    diagnostics.extend(spacing_checker.diagnostics().iter().cloned());
+
     Ok(diagnostics)
 }
 
@@ -68,33 +74,16 @@ fn check_line_length(
     ))
 }
 
-fn check_spacing(
-    config: &Config,
-    document: &Document,
-    line_index: u32,
-    line: &str,
-) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-    for i in search_possible_spacing_positions(config, line) {
-        // Calculate number of characters from the beginning of the line
-        let column_index = line[..i].graphemes(true).fold(0u32, |acc, s| {
-            acc + s.encode_utf16().fold(0u32, |acc, _| acc + 1)
-        });
+#[cfg(test)]
+mod tests {
+    use cjkfmt_parser::Grammar;
 
-        // Get number of Unicode scalar values of the next character
-        let next_char_len = line
-            .graphemes(true)
-            .nth(i)
-            .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
-            .unwrap_or(0u32);
+    use super::*;
 
-        diagnostics.push(Diagnostic::new(
-            document.filename.as_deref(),
-            Position::new(line_index, column_index),
-            Position::new(line_index, column_index + next_char_len),
-            "W002".to_string(),
-            "Possible spacing position found".to_string(),
-        ));
+    #[test]
+    fn check_one_file_should_fail_if_called_before_parse() {
+        let config = Config::default();
+        let document = Document::new::<&str, &str>("# Subject", Grammar::Markdown, None);
+        assert!(check_one_file(&config, &document).is_err());
     }
-    diagnostics
 }

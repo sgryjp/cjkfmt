@@ -6,6 +6,7 @@ mod document;
 mod format;
 mod line_break;
 mod spacing;
+mod spacing_checker;
 
 use std::io::stdout;
 
@@ -87,7 +88,8 @@ mod file_based_tests {
         .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-        let document = Document::new(&test_case.input, Grammar::Json, Some(resource));
+        let mut document = Document::new(&test_case.input, Grammar::Json, Some(resource));
+        document.parse().expect("failed to parse the document");
         let actual = check_one_file(&test_case.config, &document)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
 
