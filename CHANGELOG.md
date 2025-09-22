@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Miscellaneous
+
+- Refactored the space problem checker to work on the concrete syntax tree (CST) rather than
+  processing plain text line by line.
+
 ## v0.0.7 - 2025-08-05
 
 ### Added
