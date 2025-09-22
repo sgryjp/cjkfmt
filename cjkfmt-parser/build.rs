@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let repo_name = spec
             .repo_url
             .path_segments()
-            .and_then(|segments| segments.last())
+            .and_then(|mut segments| segments.next_back())
             .ok_or("Invalid repository URL")?
             .trim_end_matches(".git");
         let repo_dir = grammars_dir.join(repo_name);
