@@ -10,12 +10,16 @@ on:
       - "**/Cargo.lock"
   pull_request:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Run security audit
         uses: rustsec/audit-check@master
         with:
