@@ -12,4 +12,4 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-rstest = "0.25.0"
+rstest = "0.26.1"
