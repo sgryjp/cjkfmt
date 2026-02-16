@@ -4,7 +4,11 @@ use std::{
     path::Path,
 };
 
-use crate::{check::check_one_file, cli::utils::format_diagnostic, config::Config};
+use cjkfmt_parser::{Grammar, grammar_from_path};
+
+use crate::{
+    check::check_one_file, cli::utils::format_diagnostic, config::Config, document::Document,
+};
 
 pub fn check_command<W, P>(stdout: &mut W, config: &Config, filenames: &[P]) -> anyhow::Result<()>
 where
@@ -17,13 +21,22 @@ where
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin().read_to_string(&mut content)?;
-        let diagnostic = check_one_file(config, None, &content)?;
+        let mut document = Document::new(content, Grammar::Markdown, None::<String>);
+        document.parse()?;
+        let diagnostic = check_one_file(config, &document)?;
         diagnostics.extend(diagnostic);
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
+            let grammar = grammar_from_path(filename);
             let content = fs::read_to_string(filename)?;
-            let diagnostics_ = check_one_file(config, Some(&filename.to_string_lossy()), &content)?;
+            let mut document = Document::new(
+                content,
+                grammar,
+                Some(filename.to_string_lossy().to_string()),
+            );
+            document.parse()?;
+            let diagnostics_ = check_one_file(config, &document)?;
             diagnostics.extend(diagnostics_);
         }
     }

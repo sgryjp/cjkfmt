@@ -2,9 +2,11 @@ mod _log;
 mod check;
 mod cli;
 mod config;
+mod document;
 mod format;
 mod line_break;
 mod spacing;
+mod spacing_checker;
 
 use std::io::stdout;
 
@@ -51,6 +53,7 @@ mod file_based_tests {
 
     use cjkfmt_core::diagnostic::Diagnostic;
     use cjkfmt_core::position::Position;
+    use cjkfmt_parser::Grammar;
     use regex::Regex;
     use serde::Deserialize;
     use serde_json::{self};
@@ -59,6 +62,7 @@ mod file_based_tests {
     use crate::_log::test_log;
     use crate::check::check_one_file;
     use crate::cli::utils::format_diagnostic;
+    use crate::document::Document;
     use crate::format::format_one_file;
 
     #[derive(Default, Debug, Deserialize)]
@@ -84,7 +88,9 @@ mod file_based_tests {
         .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-        let actual = check_one_file(&test_case.config, Some(resource), &test_case.input)
+        let mut document = Document::new(&test_case.input, Grammar::Json, Some(resource));
+        document.parse().expect("failed to parse the document");
+        let actual = check_one_file(&test_case.config, &document)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
 
         // Find the offset of the original input text in the test data
