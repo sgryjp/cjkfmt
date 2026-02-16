@@ -12,22 +12,22 @@ name = "cjkfmt"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.97"
+anyhow = "1.0.101"
 cjkfmt-core = { path = "../cjkfmt-core" }
 cjkfmt-parser = { path = "../cjkfmt-parser" }
-clap = { version = "4.5.41", features = ["cargo", "derive", "wrap_help"] }
+clap = { version = "4.5.57", features = ["cargo", "derive", "wrap_help"] }
 figment = { version = "0.10.19", features = ["env", "json"] }
-home = "0.5.11"
+home = "0.5.12"
 serde.workspace = true
 tree-sitter.workspace = true
-unicode-general-category = "1.0.0"
+unicode-general-category = "1.1.0"
 unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.12.0"
-unicode-width = { version = "0.2.0", features = ["cjk"] }
+unicode-width = { version = "0.2.2", features = ["cjk"] }
 yansi = { version = "1.0.1", features = ["detect-env", "detect-tty"] }
 
 [dev-dependencies]
-regex = "1.11.1"
+regex = "1.12.3"
 rstest.workspace = true
-serde_json = "1.0.140"
+serde_json = "1.0.149"
 test-generator = "0.3.1"
