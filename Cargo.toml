@@ -13,4 +13,4 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 rstest = "0.26.1"
-tree-sitter = "0.25.8"
+tree-sitter = "0.26.6"
