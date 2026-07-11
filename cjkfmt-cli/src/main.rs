@@ -88,7 +88,10 @@ mod file_based_tests {
         .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-        let mut document = Document::new(&test_case.input, Grammar::Json, Some(resource));
+        // Use Markdown grammar because `input` is raw text content from the test
+        // case file; JSON grammar has no inline nodes and would not exercise the
+        // spacing checker.
+        let mut document = Document::new(&test_case.input, Grammar::Markdown, Some(resource));
         document.parse().expect("failed to parse the document");
         let actual = check_one_file(&test_case.config, &document)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
@@ -125,6 +128,11 @@ mod file_based_tests {
             let formatted = format_diagnostic(&diagnostic);
             test_log!("diagnostics[{i:2}] = {formatted}");
         }
+        assert_eq!(
+            actual.len(),
+            test_case.diagnostics.len(),
+            "diagnostic count mismatch"
+        );
         actual
             .iter()
             .zip(&test_case.diagnostics)
