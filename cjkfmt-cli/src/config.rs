@@ -31,7 +31,7 @@ impl Config {
             .or_else(env::home_dir);
         let user_config_path = config_home
             .map(|p| p.join(".cjkfmt.json"))
-            .and_then(|p| if p.exists() { Some(p) } else { None });
+            .filter(|p| p.exists());
 
         // Load configuration from various sources:
         //

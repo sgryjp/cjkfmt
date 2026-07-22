@@ -16,6 +16,6 @@ pub fn format_diagnostic(diagnostic: &Diagnostic) -> String {
 
     format!(
         "{filename}{}{line}{}{column}{} {code} {message}",
-        &colon, &colon, &colon
+        colon, colon, colon
     )
 }
