@@ -79,11 +79,27 @@ mod tests {
     use cjkfmt_parser::Grammar;
 
     use super::*;
+    use crate::config::SpacingRule;
 
     #[test]
     fn check_one_file_should_fail_if_called_before_parse() {
         let config = Config::default();
         let document = Document::new::<&str, &str>("# Subject", Grammar::Markdown, None);
         assert!(check_one_file(&config, &document).is_err());
+    }
+
+    #[test]
+    fn check_one_file_reports_spacing_columns_from_line_start() {
+        let mut config = Config::default();
+        config.spacing.digits = SpacingRule::Require;
+
+        let mut document = Document::new("# 漢1\n", Grammar::Markdown, Some("t.md"));
+        document.parse().expect("failed to parse the document");
+
+        let diagnostics = check_one_file(&config, &document).expect("failed to check document");
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, "W002");
+        assert_eq!(diagnostics[0].start, Position::new(0, 3));
+        assert_eq!(diagnostics[0].end, Position::new(0, 4));
     }
 }
