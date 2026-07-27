@@ -161,19 +161,24 @@ mod file_based_tests {
     }
 
     fn assert_diagnostics_are_equal(a: &Diagnostic, b: &Diagnostic) {
+        use std::path::MAIN_SEPARATOR;
+
         match (&a.filename, &b.filename) {
             (Some(f1), Some(f2)) => {
+                // Replace path separators in expected filename so the test
+                // runs on both Unix-like and Windows systems.
+                let expected = f2.replace('/', std::str::from_utf8(&[MAIN_SEPARATOR as u8]).unwrap());
                 // Check whether the longer one ends with the shorter one
                 // so that the difference of working directory are ignored.
-                if f1.len() < f2.len() {
+                if f1.len() < expected.len() {
                     assert!(
-                        f2.ends_with(f1),
-                        "filename does not match: {f1:?} and {f2:?}"
+                        expected.ends_with(f1),
+                        "filename does not match: {f1:?} and {expected:?}"
                     );
                 } else {
                     assert!(
-                        f1.ends_with(f2),
-                        "filename does not match: {f1:?} and {f2:?}"
+                        f1.ends_with(&expected),
+                        "filename does not match: {f1:?} and {expected:?}"
                     );
                 }
             }
