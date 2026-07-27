@@ -81,6 +81,9 @@ mod file_based_tests {
 
     #[test_resources("cjkfmt-cli/test_cases/check/*.json")]
     fn check(resource: &str) {
+        // Normalize path separators so tests work on both Unix-like and Windows systems
+        let resource = resource.replace('\\', "/");
+
         // Load the test case from the JSON file
         let content = std::fs::read_to_string(
             resource.strip_prefix("cjkfmt-cli/").unwrap(), // Removing as test runs in subcrate's dir
@@ -91,7 +94,7 @@ mod file_based_tests {
         // Use Markdown grammar because `input` is raw text content from the test
         // case file; JSON grammar has no inline nodes and would not exercise the
         // spacing checker.
-        let mut document = Document::new(&test_case.input, Grammar::Markdown, Some(resource));
+        let mut document = Document::new(&test_case.input, Grammar::Markdown, Some(&resource));
         document.parse().expect("failed to parse the document");
         let actual = check_one_file(&test_case.config, &document)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
@@ -141,6 +144,9 @@ mod file_based_tests {
 
     #[test_resources("cjkfmt-cli/test_cases/format/*.json")]
     fn format(resource: &str) {
+        // Normalize path separators so tests work on both Unix-like and Windows systems
+        let resource = resource.replace('\\', "/");
+
         // Load the test case from the JSON file
         let content = std::fs::read_to_string(
             resource.strip_prefix("cjkfmt-cli/").unwrap(), // Removing as test runs in subcrate's dir
@@ -161,24 +167,19 @@ mod file_based_tests {
     }
 
     fn assert_diagnostics_are_equal(a: &Diagnostic, b: &Diagnostic) {
-        use std::path::MAIN_SEPARATOR;
-
         match (&a.filename, &b.filename) {
             (Some(f1), Some(f2)) => {
-                // Replace path separators in expected filename so the test
-                // runs on both Unix-like and Windows systems.
-                let expected = f2.replace('/', std::str::from_utf8(&[MAIN_SEPARATOR as u8]).unwrap());
                 // Check whether the longer one ends with the shorter one
                 // so that the difference of working directory are ignored.
-                if f1.len() < expected.len() {
+                if f1.len() < f2.len() {
                     assert!(
-                        expected.ends_with(f1),
-                        "filename does not match: {f1:?} and {expected:?}"
+                        f2.ends_with(f1),
+                        "filename does not match: {f1:?} and {f2:?}"
                     );
                 } else {
                     assert!(
-                        f1.ends_with(&expected),
-                        "filename does not match: {f1:?} and {expected:?}"
+                        f1.ends_with(f2),
+                        "filename does not match: {f1:?} and {f2:?}"
                     );
                 }
             }
