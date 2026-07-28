@@ -22,14 +22,14 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Cache advisory database
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/advisory-db
           key: advisory-db-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: advisory-db-
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9  # v2.84.0
+        uses: taiki-e/install-action@41049aa56687c35e0afa74eed4f09cec4f9afabf  # v2.85.2
         with:
           tool: cargo-audit
 
