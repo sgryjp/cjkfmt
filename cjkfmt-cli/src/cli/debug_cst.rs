@@ -42,7 +42,11 @@ where
     Ok(())
 }
 
-fn write_tree<W: std::io::Write>(stdout: &mut W, grammar: Grammar, content: &str) -> anyhow::Result<()> {
+fn write_tree<W: std::io::Write>(
+    stdout: &mut W,
+    grammar: Grammar,
+    content: &str,
+) -> anyhow::Result<()> {
     let tree = parse(grammar, content)?;
     writeln!(stdout, "{}", render_tree(&tree))?;
     Ok(())
@@ -76,7 +80,9 @@ fn render_node(output: &mut String, node: Node<'_>, field_name: Option<&str>, in
 
     for i in 0..named_child_count {
         output.push('\n');
-        let child = node.named_child(i as u32).expect("named child should exist");
+        let child = node
+            .named_child(i as u32)
+            .expect("named child should exist");
         let field_name = node.field_name_for_named_child(i as u32);
         render_node(output, child, field_name, indent + 2);
     }
