@@ -1,7 +1,11 @@
 use std::{
+    fs,
     io::{Read, stdin},
     path::Path,
 };
+
+use cjkfmt_parser::{Grammar, grammar_from_path, parse};
+use tree_sitter::{Node, Tree};
 
 pub fn debug_cst_command<W, P>(stdout: &mut W, filenames: &[P]) -> anyhow::Result<()>
 where
@@ -13,16 +17,75 @@ where
 }
 
 fn debug_cst_command_with_reader<W, P, R>(
-    _stdout: &mut W,
-    _filenames: &[P],
-    _stdin: &mut R,
+    stdout: &mut W,
+    filenames: &[P],
+    stdin: &mut R,
 ) -> anyhow::Result<()>
 where
     W: std::io::Write,
     P: AsRef<Path>,
     R: Read,
 {
-    todo!()
+    if filenames.is_empty() {
+        let mut content = String::with_capacity(1024);
+        stdin.read_to_string(&mut content)?;
+        write_tree(stdout, Grammar::Markdown, &content)?;
+    } else {
+        for filename in filenames {
+            let filename = filename.as_ref();
+            let grammar = grammar_from_path(filename);
+            let content = fs::read_to_string(filename)?;
+            write_tree(stdout, grammar, &content)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn write_tree<W: std::io::Write>(stdout: &mut W, grammar: Grammar, content: &str) -> anyhow::Result<()> {
+    let tree = parse(grammar, content)?;
+    writeln!(stdout, "{}", render_tree(&tree))?;
+    Ok(())
+}
+
+fn render_tree(tree: &Tree) -> String {
+    let mut output = String::new();
+    render_node(&mut output, tree.root_node(), None, 0);
+    output
+}
+
+fn render_node(output: &mut String, node: Node<'_>, field_name: Option<&str>, indent: usize) {
+    output.push_str(&" ".repeat(indent));
+    if let Some(field_name) = field_name {
+        output.push_str(field_name);
+        output.push_str(": ");
+    }
+
+    output.push('(');
+    output.push_str(node.kind());
+    output.push(' ');
+    output.push_str(&format_position(node.start_position()));
+    output.push_str(" - ");
+    output.push_str(&format_position(node.end_position()));
+
+    let named_child_count = node.named_child_count();
+    if named_child_count == 0 {
+        output.push(')');
+        return;
+    }
+
+    for i in 0..named_child_count {
+        output.push('\n');
+        let child = node.named_child(i as u32).expect("named child should exist");
+        let field_name = node.field_name_for_named_child(i as u32);
+        render_node(output, child, field_name, indent + 2);
+    }
+
+    output.push(')');
+}
+
+fn format_position(point: tree_sitter::Point) -> String {
+    format!("[{}, {}]", point.row, point.column)
 }
 
 #[cfg(test)]
