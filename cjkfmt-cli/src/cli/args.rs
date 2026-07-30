@@ -72,4 +72,11 @@ pub enum Commands {
         #[arg()]
         filenames: Vec<PathBuf>,
     },
+
+    /// Print the parsed concrete syntax tree for debugging.
+    DebugCst {
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
 }
