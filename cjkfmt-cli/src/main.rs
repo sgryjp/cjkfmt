@@ -17,6 +17,7 @@ use crate::{
     cli::{
         args::{self, CliArgs, ColorOutputMode},
         check::check_command,
+        debug_cst::debug_cst_command,
         format::format_command,
     },
     config::Config,
@@ -38,6 +39,9 @@ fn main() -> anyhow::Result<()> {
     match args.command {
         args::Commands::Check { filenames } => {
             check_command(&mut stdout, &config, filenames.as_slice())?
+        }
+        args::Commands::DebugCst { filenames } => {
+            debug_cst_command(&mut stdout, filenames.as_slice())?
         }
         args::Commands::Format { filenames } => {
             format_command(&mut stdout, &config, filenames.as_slice())?
