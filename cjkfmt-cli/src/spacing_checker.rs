@@ -34,38 +34,35 @@ impl<'a> NodeVisitor for SpacingChecker<'a> {
         if "inline" == node.kind() {
             // Get the the corresponding text from the document
             let range = node.byte_range();
+            let range_start = range.start;
             let text = &self.document.content[range];
 
             // Search for possible spacing positions and store them as diagnostics
             for i in search_possible_spacing_positions(self.config, text) {
-                // Get the line index of the position
-                let Some(line_index) = self
-                    .document
-                    .tree()
-                    .expect("Document tree should have been parsed")
-                    .root_node()
-                    .descendant_for_byte_range(i, i)
-                    .map(|node| node.start_position().row)
-                else {
-                    continue;
-                };
+                let absolute_index = range_start + i;
+                let text_before = &self.document.content[..absolute_index];
+                let line_index = text_before.chars().filter(|&c| c == '\n').count() as u32;
+                let line_start = text_before
+                    .rsplit_once('\n')
+                    .map(|(_, line)| line)
+                    .unwrap_or(text_before);
 
                 // Calculate number of characters from the beginning of the line
-                let column_index = text[..i].graphemes(true).fold(0u32, |acc, s| {
+                let column_index = line_start.graphemes(true).fold(0u32, |acc, s| {
                     acc + s.encode_utf16().fold(0u32, |acc, _| acc + 1)
                 });
 
                 // Get number of Unicode scalar values of the next character
-                let next_char_len = text
+                let next_char_len = text[i..]
                     .graphemes(true)
-                    .nth(i)
+                    .next()
                     .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
                     .unwrap_or(0u32);
 
                 let d = Diagnostic::new(
                     self.document.filename.as_deref(),
-                    Position::new(line_index as u32, column_index),
-                    Position::new(line_index as u32, column_index + next_char_len),
+                    Position::new(line_index, column_index),
+                    Position::new(line_index, column_index + next_char_len),
                     "W002".to_string(),
                     "Possible spacing position found".to_string(),
                 );
