@@ -56,6 +56,8 @@ impl Provider for CliArgs {
     }
 
     fn data(&self) -> Result<Map<Profile, Dict>, figment::Error> {
+        // Note: `to_ascii_lowercase` does not convert the string into snake_case so we should use a
+        // new crate and use it for case-conversion (e.g., `heck`)
         let mut dict = BTreeMap::new();
         if let Some(max_width) = self.max_width {
             dict.insert("max_width".to_string(), Value::from(max_width));
@@ -63,7 +65,7 @@ impl Provider for CliArgs {
         if let Some(ambiguous_width) = self.ambiguous_width {
             dict.insert(
                 "ambiguous_width".to_string(),
-                Value::from(format!("{ambiguous_width:?}")),
+                Value::from(format!("{ambiguous_width:?}").to_ascii_lowercase()),
             );
         }
 

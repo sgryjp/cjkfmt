@@ -106,6 +106,7 @@ mod tests {
         Figment,
         providers::{Format, Json, Serialized},
     };
+    use rstest::rstest;
     use serde_json::json;
 
     use super::*;
@@ -131,7 +132,7 @@ mod tests {
             .merge(Json::string(
                 r#"{
                     "max_width": 90,
-                    "ambiguous_width": "Narrow",
+                    "ambiguous_width": "narrow",
                     "spacing": { "alphabets": "require", "digits": "require" }
                 }"#,
             ))
@@ -157,16 +158,81 @@ mod tests {
             "the CLI should override the environment"
         );
     }
+
+    #[rstest]
+    // "snake_case" is the documented, canonical form (ADR-0001).
+    #[case("narrow", Some(AmbiguousWidth::Narrow))]
+    #[case("wide", Some(AmbiguousWidth::Wide))]
+    #[case("halfwidth", Some(AmbiguousWidth::Narrow))]
+    #[case("fullwidth", Some(AmbiguousWidth::Wide))]
+    #[case("Narrow", None)]
+    #[case("Wide", None)]
+    #[case("Halfwidth", None)]
+    #[case("Fullwidth", None)]
+    fn ambiguous_width_accepts_only_snake_case_value(
+        #[case] value: &str,
+        #[case] expected: Option<AmbiguousWidth>,
+    ) {
+        let result: Result<Config, _> = Figment::new()
+            .merge(Serialized::defaults(Config::default()))
+            .merge(Json::string(&format!(
+                r#"{{ "ambiguous_width": "{value}" }}"#
+            )))
+            .extract();
+
+        match expected {
+            Some(expected) => assert_eq!(
+                result
+                    .expect("the documented snake_case value should deserialize")
+                    .ambiguous_width,
+                expected
+            ),
+            None => assert!(result.is_err(), "non-snake_case value should be rejected"),
+        }
+    }
+
+    #[rstest]
+    // "snake_case" is the documented, canonical form (ADR-0001).
+    #[case("require", Some(SpacingRule::Require))]
+    #[case("prohibit", Some(SpacingRule::Prohibit))]
+    #[case("ignore", Some(SpacingRule::Ignore))]
+    #[case("Require", None)]
+    #[case("Prohibit", None)]
+    #[case("Ignore", None)]
+    fn spacing_rule_accepts_only_snake_case_value(
+        #[case] value: &str,
+        #[case] expected: Option<SpacingRule>,
+    ) {
+        let result: Result<Config, _> = Figment::new()
+            .merge(Serialized::defaults(Config::default()))
+            .merge(Json::string(&format!(
+                r#"{{ "spacing": {{ "alphabets": "{value}" }} }}"#
+            )))
+            .extract();
+
+        match expected {
+            Some(expected) => assert_eq!(
+                result
+                    .expect("the documented snake_case value should deserialize")
+                    .spacing
+                    .alphabets,
+                expected
+            ),
+            None => assert!(result.is_err(), "non-snake_case value should be rejected"),
+        }
+    }
 }
 
 /// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
 pub enum AmbiguousWidth {
     /// Treat characters in the Ambiguous category as 1.
-    #[serde(alias = "Halfwidth")]
+    // `halfwidth` is kept as a friendlier synonym some users may reach for.
+    #[serde(alias = "halfwidth")]
     Narrow,
 
     /// Treat characters in the Ambiguous category as 2.
-    #[serde(alias = "Fullwidth")]
+    #[serde(alias = "fullwidth")]
     Wide,
 }
