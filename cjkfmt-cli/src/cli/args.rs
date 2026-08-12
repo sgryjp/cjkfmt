@@ -110,6 +110,13 @@ mod tests {
             .expect("CLI values should deserialize as configuration")
     }
 
+    #[test]
+    fn max_width_flag_maps_clap_value_to_config() {
+        let config = config_from(["cjkfmt", "--max-width", "42", "format"]);
+
+        assert_eq!(config.max_width, 42);
+    }
+
     #[rstest]
     #[case("narrow", AmbiguousWidth::Narrow)]
     #[case("wide", AmbiguousWidth::Wide)]

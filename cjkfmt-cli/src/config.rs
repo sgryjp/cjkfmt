@@ -115,8 +115,11 @@ mod tests {
     }
 
     #[test]
+    // Re-implements `Config::from_cli_args`'s merge chain rather than calling it, since
+    // that function touches real files and env vars. Keep the two in sync manually.
     fn configuration_sources_are_applied_in_default_file_env_cli_order() {
         let args = parse_args(["cjkfmt", "--spacing-digits", "ignore", "format"]);
+        // Stands in for the env layer's position in the chain; not real `Env::prefixed` parsing.
         let environment = json!({
             "spacing": {
                 "alphabets": "prohibit",
