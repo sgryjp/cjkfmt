@@ -45,10 +45,6 @@ pub struct CliArgs {
     #[arg(long, value_enum)]
     pub spacing_digits: Option<SpacingRule>,
 
-    /// Whether full-width punctuation is treated as full-width (`true` or `false`). [default: false]
-    #[arg(long, action = clap::ArgAction::Set)]
-    pub spacing_punctuation_as_fullwidth: Option<bool>,
-
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -82,12 +78,6 @@ impl Provider for CliArgs {
             spacing.insert(
                 "digits".to_string(),
                 Value::from(format!("{digits:?}").to_ascii_lowercase()),
-            );
-        }
-        if let Some(punctuation_as_fullwidth) = self.spacing_punctuation_as_fullwidth {
-            spacing.insert(
-                "punctuation_as_fullwidth".to_string(),
-                Value::from(punctuation_as_fullwidth),
             );
         }
         if !spacing.is_empty() {

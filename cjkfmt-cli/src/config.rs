@@ -86,9 +86,8 @@ pub struct SpacingConfig {
 
     /// How to handle spaces between full-width and half-width digits.
     pub digits: SpacingRule,
-
-    /// Whether to treat full-width punctuation as full-width characters or not.
-    pub punctuation_as_fullwidth: bool, // TODO: Use punctuation_as_fullwidth setting
+    // /// Whether to treat full-width punctuation as full-width characters or not.
+    // pub punctuation_as_fullwidth: bool, // TODO: Implement this option
 }
 
 impl Default for SpacingConfig {
@@ -96,7 +95,6 @@ impl Default for SpacingConfig {
         SpacingConfig {
             alphabets: SpacingRule::Ignore,
             digits: SpacingRule::Ignore,
-            punctuation_as_fullwidth: false,
         }
     }
 }
