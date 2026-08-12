@@ -3,9 +3,11 @@ use std::{collections::BTreeMap, path::PathBuf};
 use clap::{Parser, Subcommand, ValueEnum};
 use figment::{
     Profile, Provider,
-    value::{Dict, Map},
+    value::{Dict, Map, Value},
 };
 use serde::{Deserialize, Serialize};
+
+use crate::config::{AmbiguousWidth, SpacingRule};
 
 #[derive(ValueEnum, Debug, Clone, Deserialize, Serialize)]
 pub enum ColorOutputMode {
@@ -31,6 +33,22 @@ pub struct CliArgs {
     #[arg(short, long)]
     pub max_width: Option<u32>,
 
+    /// How to treat characters in Unicode's Ambiguous category: `narrow` or `wide`. [default: wide]
+    #[arg(long, value_enum)]
+    pub ambiguous_width: Option<AmbiguousWidth>,
+
+    /// Require, prohibit, or ignore spaces between full-width and half-width alphabets. [default: ignore]
+    #[arg(long, value_enum)]
+    pub spacing_alphabets: Option<SpacingRule>,
+
+    /// Require, prohibit, or ignore spaces between full-width and half-width digits. [default: ignore]
+    #[arg(long, value_enum)]
+    pub spacing_digits: Option<SpacingRule>,
+
+    /// Whether full-width punctuation is treated as full-width (`true` or `false`). [default: false]
+    #[arg(long, action = clap::ArgAction::Set)]
+    pub spacing_punctuation_as_fullwidth: Option<bool>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -44,10 +62,36 @@ impl Provider for CliArgs {
     fn data(&self) -> Result<Map<Profile, Dict>, figment::Error> {
         let mut dict = BTreeMap::new();
         if let Some(max_width) = self.max_width {
+            dict.insert("max_width".to_string(), Value::from(max_width));
+        }
+        if let Some(ambiguous_width) = self.ambiguous_width {
             dict.insert(
-                "max_width".to_string(),
-                figment::value::Value::from(max_width),
+                "ambiguous_width".to_string(),
+                Value::from(format!("{ambiguous_width:?}")),
             );
+        }
+
+        let mut spacing = BTreeMap::new();
+        if let Some(alphabets) = self.spacing_alphabets {
+            spacing.insert(
+                "alphabets".to_string(),
+                Value::from(format!("{alphabets:?}").to_ascii_lowercase()),
+            );
+        }
+        if let Some(digits) = self.spacing_digits {
+            spacing.insert(
+                "digits".to_string(),
+                Value::from(format!("{digits:?}").to_ascii_lowercase()),
+            );
+        }
+        if let Some(punctuation_as_fullwidth) = self.spacing_punctuation_as_fullwidth {
+            spacing.insert(
+                "punctuation_as_fullwidth".to_string(),
+                Value::from(punctuation_as_fullwidth),
+            );
+        }
+        if !spacing.is_empty() {
+            dict.insert("spacing".to_string(), Value::from(spacing));
         }
 
         let mut map = BTreeMap::new();

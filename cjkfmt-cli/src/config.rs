@@ -1,5 +1,6 @@
 use std::{env, path::PathBuf};
 
+use clap::ValueEnum;
 use figment::{
     Figment,
     providers::{Env, Format, Json, Serialized},
@@ -63,7 +64,7 @@ impl Default for Config {
 }
 
 /// Rules for handling spaces between full-width and half-width characters.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum SpacingRule {
     /// Require a space between full-width and half-width characters.
@@ -101,7 +102,7 @@ impl Default for SpacingConfig {
 }
 
 /// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 pub enum AmbiguousWidth {
     /// Treat characters in the Ambiguous category as 1.
     #[serde(alias = "Halfwidth")]
