@@ -91,6 +91,79 @@ impl Provider for CliArgs {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use figment::{Figment, providers::Serialized};
+    use rstest::rstest;
+
+    use super::*;
+    use crate::config::Config;
+
+    fn config_from(arguments: impl IntoIterator<Item = &'static str>) -> Config {
+        let args =
+            CliArgs::try_parse_from(arguments).expect("the command-line arguments should parse");
+
+        Figment::new()
+            .merge(Serialized::defaults(Config::default()))
+            .merge(&args)
+            .extract()
+            .expect("CLI values should deserialize as configuration")
+    }
+
+    #[rstest]
+    #[case("narrow", AmbiguousWidth::Narrow)]
+    #[case("wide", AmbiguousWidth::Wide)]
+    fn ambiguous_width_flag_maps_each_clap_value_to_config(
+        #[case] value: &'static str,
+        #[case] expected: AmbiguousWidth,
+    ) {
+        let config = config_from(["cjkfmt", "--ambiguous-width", value, "format"]);
+
+        assert_eq!(config.ambiguous_width, expected);
+    }
+
+    #[rstest]
+    #[case("require", SpacingRule::Require)]
+    #[case("prohibit", SpacingRule::Prohibit)]
+    #[case("ignore", SpacingRule::Ignore)]
+    fn spacing_alphabets_flag_maps_each_clap_value_to_config(
+        #[case] value: &'static str,
+        #[case] expected: SpacingRule,
+    ) {
+        let config = config_from(["cjkfmt", "--spacing-alphabets", value, "format"]);
+
+        assert_eq!(config.spacing.alphabets, expected);
+    }
+
+    #[rstest]
+    #[case("require", SpacingRule::Require)]
+    #[case("prohibit", SpacingRule::Prohibit)]
+    #[case("ignore", SpacingRule::Ignore)]
+    fn spacing_digits_flag_maps_each_clap_value_to_config(
+        #[case] value: &'static str,
+        #[case] expected: SpacingRule,
+    ) {
+        let config = config_from(["cjkfmt", "--spacing-digits", value, "format"]);
+
+        assert_eq!(config.spacing.digits, expected);
+    }
+
+    #[test]
+    fn spacing_flags_are_merged_as_independent_nested_config_values() {
+        let config = config_from([
+            "cjkfmt",
+            "--spacing-alphabets",
+            "require",
+            "--spacing-digits",
+            "prohibit",
+            "format",
+        ]);
+
+        assert_eq!(config.spacing.alphabets, SpacingRule::Require);
+        assert_eq!(config.spacing.digits, SpacingRule::Prohibit);
+    }
+}
+
 #[derive(Subcommand, Debug, Deserialize, Serialize)]
 pub enum Commands {
     /// Format files according to CJK text formatting rules.

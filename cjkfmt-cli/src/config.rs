@@ -99,6 +99,63 @@ impl Default for SpacingConfig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+    use figment::{
+        Figment,
+        providers::{Format, Json, Serialized},
+    };
+    use serde_json::json;
+
+    use super::*;
+
+    fn parse_args(arguments: impl IntoIterator<Item = &'static str>) -> CliArgs {
+        CliArgs::try_parse_from(arguments).expect("the command-line arguments should parse")
+    }
+
+    #[test]
+    fn configuration_sources_are_applied_in_default_file_env_cli_order() {
+        let args = parse_args(["cjkfmt", "--spacing-digits", "ignore", "format"]);
+        let environment = json!({
+            "spacing": {
+                "alphabets": "prohibit",
+                "digits": "prohibit",
+            },
+        });
+        let config: Config = Figment::new()
+            .merge(Serialized::defaults(Config::default()))
+            .merge(Json::string(
+                r#"{
+                    "max_width": 90,
+                    "ambiguous_width": "Narrow",
+                    "spacing": { "alphabets": "require", "digits": "require" }
+                }"#,
+            ))
+            .merge(Serialized::defaults(environment))
+            .merge(&args)
+            .extract()
+            .expect("all configuration sources should deserialize");
+
+        assert_eq!(config.max_width, 90, "the file should override the default");
+        assert_eq!(
+            config.ambiguous_width,
+            AmbiguousWidth::Narrow,
+            "the file should override the default"
+        );
+        assert_eq!(
+            config.spacing.alphabets,
+            SpacingRule::Prohibit,
+            "the environment should override the file"
+        );
+        assert_eq!(
+            config.spacing.digits,
+            SpacingRule::Ignore,
+            "the CLI should override the environment"
+        );
+    }
+}
+
 /// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 pub enum AmbiguousWidth {
