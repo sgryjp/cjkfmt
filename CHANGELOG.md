@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added the CLI options for config override: `--ambiguous-width`, `--spacing-alphabets`,
+  `--spacing-digits`, and `--spacing-punctuation-as-fullwidth`.
+
 ### Miscellaneous
 
 - Refactored the space problem checker to work on the concrete syntax tree (CST) rather than
