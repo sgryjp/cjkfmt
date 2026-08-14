@@ -10,6 +10,10 @@ pre-commit:
       tags: format
       glob: "*.rs"
       run: cargo fmt --check -- {staged_files}
+    markdownlint:
+      tags: format
+      glob: "*.md"
+      run: npx --yes markdownlint-cli2 {staged_files}
 
 pre-push:
   parallel: true
