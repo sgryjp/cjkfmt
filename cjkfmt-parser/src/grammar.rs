@@ -5,6 +5,7 @@ use std::path::Path;
 pub enum Grammar {
     Json,
     Markdown,
+    MarkdownInline,
 }
 
 /// Infers the grammar type from the file extension of the given path.
