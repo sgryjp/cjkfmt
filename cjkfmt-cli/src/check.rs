@@ -102,4 +102,19 @@ mod tests {
         assert_eq!(diagnostics[0].start, Position::new(0, 3));
         assert_eq!(diagnostics[0].end, Position::new(0, 4));
     }
+
+    #[test]
+    fn check_one_file_reports_spacing_columns_for_a_later_inline_node() {
+        let mut config = Config::default();
+        config.spacing.digits = SpacingRule::Require;
+
+        let mut document = Document::new("# 見出し\n\n# 漢1\n", Grammar::Markdown, Some("t.md"));
+        document.parse().expect("failed to parse the document");
+
+        let diagnostics = check_one_file(&config, &document).expect("failed to check document");
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, "W002");
+        assert_eq!(diagnostics[0].start, Position::new(2, 3));
+        assert_eq!(diagnostics[0].end, Position::new(2, 4));
+    }
 }

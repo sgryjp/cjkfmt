@@ -1,0 +1,17 @@
+{
+  "config": {
+    "spacing": {
+      "digits": "require"
+    }
+  },
+  "input": "# 見出し\n\n# 漢1\n",
+  "diagnostics": [
+    {
+      "filename": "test_cases/check/spacing-006.json",
+      "start": { "line": 2, "column": 3 },
+      "end": { "line": 2, "column": 4 },
+      "code": "W002",
+      "message": "Possible spacing position found"
+    }
+  ]
+}
