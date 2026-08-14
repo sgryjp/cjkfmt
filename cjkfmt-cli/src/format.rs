@@ -3,6 +3,7 @@ use cjkfmt_core::lines_inclusive::LinesInclusiveExt;
 use crate::{
     config::Config,
     line_break::{BreakPoint, LineBreaker},
+    markdown_spacing::apply_markdown_spacing,
 };
 
 pub(crate) fn format_one_file<W: std::io::Write>(
@@ -10,6 +11,8 @@ pub(crate) fn format_one_file<W: std::io::Write>(
     config: &Config,
     content: &str,
 ) -> Result<(), anyhow::Error> {
+    let content = apply_markdown_spacing(config, content)?;
+
     let line_breaker = LineBreaker::builder()
         .ambiguous_width(config.ambiguous_width)
         .max_width(config.max_width)
