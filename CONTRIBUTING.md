@@ -49,7 +49,8 @@ cargo test
 
 #### Setting up lefthook
 
-This project uses [lefthook](https://github.com/evilmartians/lefthook) to enforce linting and formatting standards. To set it up:
+This project uses [lefthook](https://github.com/evilmartians/lefthook) to enforce linting and
+formatting standards. To set it up:
 
 1. Install lefthook (if you haven't already):
 
@@ -69,7 +70,12 @@ This project uses [lefthook](https://github.com/evilmartians/lefthook) to enforc
    lefthook install
    ```
 
-This will set up Git hooks that will run linters and formatters automatically on commit and push operations.
+This will set up Git hooks that will run linters and formatters automatically on commit and push
+operations.
+
+Markdown files are linted on commit using [markdownlint-cli2] (via `npx`),
+following the rules in [`.markdownlint.yml`](./.markdownlint.yml).
+Make sure you have [Node.js](https://nodejs.org/) installed so `npx` is available.
 
 ### Useful Commands
 
@@ -102,3 +108,11 @@ This will set up Git hooks that will run linters and formatters automatically on
   ```shell
   cargo fmt --all
   ```
+
+- Check Markdown files for style issues
+
+  ```shell
+  npx --yes markdownlint-cli2 "**/*.md"
+  ```
+
+[markdownlint-cli2]: https://github.com/DavidAnson/markdownlint-cli2
