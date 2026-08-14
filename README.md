@@ -30,9 +30,12 @@ The configuration file is searched for in the current directory and, if not foun
 
 Currently, the following configuration options are available:
 
-| Option      | Description                 | Default |
-| ----------- | --------------------------- | ------- |
-| `max_width` | Maximum line width to allow | 80      |
+| Option              | Description                                                           | Default  |
+| ------------------- | --------------------------------------------------------------------- | -------- |
+| `ambiguous_width`   | Width of Unicode Ambiguous characters (`narrow` or `wide`)            | `wide`   |
+| `max_width`         | Maximum line width to allow                                           | 80       |
+| `spacing.alphabets` | Require, prohibit, or ignore spaces around full-/half-width alphabets | `ignore` |
+| `spacing.digits`    | Require, prohibit, or ignore spaces around full-/half-width digits    | `ignore` |
 
 Depending on the configuration source, the option names are formatted slightly differently:
 
@@ -45,7 +48,8 @@ Depending on the configuration source, the option names are formatted slightly d
     Example: `CJKFMT_MAX_WIDTH`
 - Command line options
   - Use hyphens between words, and put two dashes before the option name.
-    Example: `--max-width 100`
+    Examples: `--max-width 100`, `--ambiguous-width narrow`,
+    `--spacing-alphabets require`, and `--spacing-digits prohibit`
 
 ### Example Configuration File
 
@@ -53,7 +57,12 @@ Below is an example configuration file `.cjkfmt.json`.
 
 ```json
 {
-  "max_width": 100
+  "ambiguous_width": "wide",
+  "max_width": 100,
+  "spacing": {
+    "alphabets": "require",
+    "digits": "ignore"
+  }
 }
 ```
 

@@ -3,9 +3,11 @@ use std::{collections::BTreeMap, path::PathBuf};
 use clap::{Parser, Subcommand, ValueEnum};
 use figment::{
     Profile, Provider,
-    value::{Dict, Map},
+    value::{Dict, Map, Value},
 };
 use serde::{Deserialize, Serialize};
+
+use crate::config::{AmbiguousWidth, SpacingRule};
 
 #[derive(ValueEnum, Debug, Clone, Deserialize, Serialize)]
 pub enum ColorOutputMode {
@@ -31,6 +33,18 @@ pub struct CliArgs {
     #[arg(short, long)]
     pub max_width: Option<u32>,
 
+    /// How to treat characters in Unicode's Ambiguous category: `narrow` or `wide`. [default: wide]
+    #[arg(long, value_enum)]
+    pub ambiguous_width: Option<AmbiguousWidth>,
+
+    /// Require, prohibit, or ignore spaces between full-width and half-width alphabets. [default: ignore]
+    #[arg(long, value_enum)]
+    pub spacing_alphabets: Option<SpacingRule>,
+
+    /// Require, prohibit, or ignore spaces between full-width and half-width digits. [default: ignore]
+    #[arg(long, value_enum)]
+    pub spacing_digits: Option<SpacingRule>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -44,16 +58,110 @@ impl Provider for CliArgs {
     fn data(&self) -> Result<Map<Profile, Dict>, figment::Error> {
         let mut dict = BTreeMap::new();
         if let Some(max_width) = self.max_width {
+            dict.insert("max_width".to_string(), Value::from(max_width));
+        }
+        if let Some(ambiguous_width) = self.ambiguous_width {
             dict.insert(
-                "max_width".to_string(),
-                figment::value::Value::from(max_width),
+                "ambiguous_width".to_string(),
+                Value::serialize(ambiguous_width)?,
             );
+        }
+
+        let mut spacing = BTreeMap::new();
+        if let Some(alphabets) = self.spacing_alphabets {
+            spacing.insert("alphabets".to_string(), Value::serialize(alphabets)?);
+        }
+        if let Some(digits) = self.spacing_digits {
+            spacing.insert("digits".to_string(), Value::serialize(digits)?);
+        }
+        if !spacing.is_empty() {
+            dict.insert("spacing".to_string(), Value::from(spacing));
         }
 
         let mut map = BTreeMap::new();
         map.insert(Profile::Default, dict);
 
         Ok(map)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use figment::{Figment, providers::Serialized};
+    use rstest::rstest;
+
+    use super::*;
+    use crate::config::Config;
+
+    fn config_from(arguments: impl IntoIterator<Item = &'static str>) -> Config {
+        let args =
+            CliArgs::try_parse_from(arguments).expect("the command-line arguments should parse");
+
+        Figment::new()
+            .merge(Serialized::defaults(Config::default()))
+            .merge(&args)
+            .extract()
+            .expect("CLI values should deserialize as configuration")
+    }
+
+    #[test]
+    fn max_width_flag_maps_clap_value_to_config() {
+        let config = config_from(["cjkfmt", "--max-width", "42", "format"]);
+
+        assert_eq!(config.max_width, 42);
+    }
+
+    #[rstest]
+    #[case("narrow", AmbiguousWidth::Narrow)]
+    #[case("wide", AmbiguousWidth::Wide)]
+    fn ambiguous_width_flag_maps_each_clap_value_to_config(
+        #[case] value: &'static str,
+        #[case] expected: AmbiguousWidth,
+    ) {
+        let config = config_from(["cjkfmt", "--ambiguous-width", value, "format"]);
+
+        assert_eq!(config.ambiguous_width, expected);
+    }
+
+    #[rstest]
+    #[case("require", SpacingRule::Require)]
+    #[case("prohibit", SpacingRule::Prohibit)]
+    #[case("ignore", SpacingRule::Ignore)]
+    fn spacing_alphabets_flag_maps_each_clap_value_to_config(
+        #[case] value: &'static str,
+        #[case] expected: SpacingRule,
+    ) {
+        let config = config_from(["cjkfmt", "--spacing-alphabets", value, "format"]);
+
+        assert_eq!(config.spacing.alphabets, expected);
+    }
+
+    #[rstest]
+    #[case("require", SpacingRule::Require)]
+    #[case("prohibit", SpacingRule::Prohibit)]
+    #[case("ignore", SpacingRule::Ignore)]
+    fn spacing_digits_flag_maps_each_clap_value_to_config(
+        #[case] value: &'static str,
+        #[case] expected: SpacingRule,
+    ) {
+        let config = config_from(["cjkfmt", "--spacing-digits", value, "format"]);
+
+        assert_eq!(config.spacing.digits, expected);
+    }
+
+    #[test]
+    fn spacing_flags_are_merged_as_independent_nested_config_values() {
+        let config = config_from([
+            "cjkfmt",
+            "--spacing-alphabets",
+            "require",
+            "--spacing-digits",
+            "prohibit",
+            "format",
+        ]);
+
+        assert_eq!(config.spacing.alphabets, SpacingRule::Require);
+        assert_eq!(config.spacing.digits, SpacingRule::Prohibit);
     }
 }
 
