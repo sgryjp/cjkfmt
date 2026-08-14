@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the CLI options for config override: `--ambiguous-width`, `--spacing-alphabets`,
   `--spacing-digits`, and `--spacing-punctuation-as-fullwidth`.
 
+### Fixed
+
+- Fixed spacing diagnostic columns for inline Markdown content that begins after the start of a line.
+
 ### Miscellaneous
 
 - Refactored the space problem checker to work on the concrete syntax tree (CST) rather than
