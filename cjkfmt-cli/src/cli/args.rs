@@ -69,16 +69,10 @@ impl Provider for CliArgs {
 
         let mut spacing = BTreeMap::new();
         if let Some(alphabets) = self.spacing_alphabets {
-            spacing.insert(
-                "alphabets".to_string(),
-                Value::serialize(alphabets)?,
-            );
+            spacing.insert("alphabets".to_string(), Value::serialize(alphabets)?);
         }
         if let Some(digits) = self.spacing_digits {
-            spacing.insert(
-                "digits".to_string(),
-                Value::serialize(digits)?,
-            );
+            spacing.insert("digits".to_string(), Value::serialize(digits)?);
         }
         if !spacing.is_empty() {
             dict.insert("spacing".to_string(), Value::from(spacing));
