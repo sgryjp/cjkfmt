@@ -79,16 +79,6 @@ pub(crate) fn spacing_edits(config: &Config, text: &str) -> Vec<TextEdit> {
     edits
 }
 
-/// Compatibility helper for the checker’s historical insertion-only API.
-#[allow(dead_code)]
-pub(crate) fn search_possible_spacing_positions(config: &Config, text: &str) -> Vec<usize> {
-    spacing_edits(config, text)
-        .into_iter()
-        .filter(|edit| edit.range.is_empty() && edit.replacement == " ")
-        .map(|edit| edit.range.start)
-        .collect()
-}
-
 #[derive(Debug, Clone, Copy)]
 struct TextCharacter {
     start: usize,
