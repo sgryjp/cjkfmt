@@ -164,7 +164,7 @@ mod file_based_tests {
         let mut actual: Vec<u8> = Vec::with_capacity(1024);
 
         // Run the formatter on the input
-        format_one_file(&mut actual, &test_case.config, &test_case.input)
+        format_one_file(&mut actual, &test_case.config, true, &test_case.input)
             .unwrap_or_else(|_| panic!("failed on formatting a file: {resource:?}"));
 
         // Compare the actual output with the expected output
