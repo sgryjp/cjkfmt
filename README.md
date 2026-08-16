@@ -57,7 +57,8 @@ Depending on the configuration source, the option names are formatted slightly d
 
 The `format` command applies the spacing rules to Markdown prose, including visible text inside
 emphasis and links. Code spans, fenced code blocks, URLs, HTML, and other non-prose inline content
-are left unchanged.
+are left unchanged. For the implementation-level character classification and the difference between
+`check` and `format`, see [the spacing implementation notes](docs/design/spacing.md).
 
 Below is an example configuration file `.cjkfmt.json`.
 

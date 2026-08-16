@@ -3,3 +3,4 @@ default: true
 line-length:
   line_length: 100
   stern: true
+  tables: false
