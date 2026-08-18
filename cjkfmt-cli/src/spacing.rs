@@ -1,9 +1,14 @@
+use std::{ops::Range, str::CharIndices};
+
 use unicode_general_category::{GeneralCategory, get_general_category};
 
-use crate::{
-    _log::test_log,
-    config::{Config, SpacingRule},
-};
+use crate::config::{Config, SpacingRule};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TextEdit {
+    pub(crate) range: Range<usize>,
+    pub(crate) replacement: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum CharType {
@@ -14,59 +19,123 @@ enum CharType {
     Other,
 }
 
-/// Enum representing possible edits for spacing.
-#[allow(dead_code)] // TODO: Use Delete variant
-enum SpaceEdit {
-    Add,
-    Delete,
-}
+/// Returns the spacing edits needed for a piece of text.
+///
+/// The ranges are UTF-8 byte ranges relative to `text`. Markdown syntax is
+/// intentionally not considered here; callers that understand a syntax tree
+/// filter these edits before applying them.
+pub(crate) fn spacing_edits(config: &Config, text: &str) -> Vec<TextEdit> {
+    let characters = text_characters(text);
+    let mut edits = Vec::new();
 
-pub fn search_possible_spacing_positions(config: &Config, text: &str) -> Vec<usize> {
-    let mut indices = Vec::new();
+    for pair in characters.windows(2) {
+        let [previous, current] = pair else {
+            unreachable!();
+        };
 
-    // Scan the text character by character to find possible position to insert a space.
-    let mut char_iterator = text.char_indices();
-    let Some(mut prev_type) = char_iterator.next().map(|(_, c)| char_type(c)) else {
-        return indices;
-    };
-    for (index, curr_char) in char_iterator {
-        // Check if this is a candidate position to insert a space
-        let curr_type = char_type(curr_char);
-        match evaluate_spacing(config, prev_type, curr_type) {
-            Some(SpaceEdit::Add) => indices.push(index),
-            Some(SpaceEdit::Delete) => todo!(),
-            None => (),
+        match (previous.kind, current.kind) {
+            pair if is_spacing_pair(pair.0, pair.1)
+                && spacing_rule(config, pair.0, pair.1) == SpacingRule::Require =>
+            {
+                edits.push(TextEdit {
+                    range: current.start..current.start,
+                    replacement: " ".to_string(),
+                });
+            }
+            _ => {}
         }
-        test_log!("{text:?}[{index:2}] --> {curr_char:?} ({prev_type:?}, {curr_type:?})");
-
-        // Update the previous character type
-        prev_type = curr_type;
     }
 
-    indices
+    // A run of ASCII spaces is handled as one edit. In particular, do not
+    // treat tabs or line endings as part of a deletable run.
+    let mut index = 0;
+    while index < characters.len() {
+        if characters[index].character != ' ' {
+            index += 1;
+            continue;
+        }
+
+        let start = index;
+        while index < characters.len() && characters[index].character == ' ' {
+            index += 1;
+        }
+        let end = index;
+        if start == 0 || end == characters.len() {
+            continue;
+        }
+
+        let left = characters[start - 1];
+        let right = characters[end];
+        if is_spacing_pair(left.kind, right.kind)
+            && spacing_rule(config, left.kind, right.kind) == SpacingRule::Prohibit
+        {
+            edits.push(TextEdit {
+                range: left.end..right.start,
+                replacement: String::new(),
+            });
+        }
+    }
+
+    edits
 }
 
-fn evaluate_spacing(config: &Config, prev: CharType, curr: CharType) -> Option<SpaceEdit> {
-    match (prev, curr) {
+#[derive(Debug, Clone, Copy)]
+struct TextCharacter {
+    start: usize,
+    end: usize,
+    character: char,
+    kind: CharType,
+}
+
+fn text_characters(text: &str) -> Vec<TextCharacter> {
+    let mut characters = Vec::new();
+    let mut indices: CharIndices<'_> = text.char_indices();
+    while let Some((start, character)) = indices.next() {
+        let end = indices
+            .clone()
+            .next()
+            .map_or(text.len(), |(index, _)| index);
+        characters.push(TextCharacter {
+            start,
+            end,
+            character,
+            kind: char_type(character),
+        });
+    }
+    characters
+}
+
+fn is_spacing_pair(left: CharType, right: CharType) -> bool {
+    matches!(
+        (left, right),
+        (CharType::Cjk, CharType::Digit)
+            | (CharType::Digit, CharType::Cjk)
+            | (CharType::Cjk, CharType::Latin)
+            | (CharType::Latin, CharType::Cjk)
+    )
+}
+
+fn spacing_rule(config: &Config, left: CharType, right: CharType) -> SpacingRule {
+    match (left, right) {
         (CharType::Cjk, CharType::Digit) | (CharType::Digit, CharType::Cjk) => {
-            match config.spacing.digits {
-                SpacingRule::Require => Some(SpaceEdit::Add),
-                SpacingRule::Prohibit => todo!(),
-                SpacingRule::Ignore => None,
-            }
+            config.spacing.digits
         }
         (CharType::Cjk, CharType::Latin) | (CharType::Latin, CharType::Cjk) => {
-            match config.spacing.alphabets {
-                SpacingRule::Require => Some(SpaceEdit::Add),
-                SpacingRule::Prohibit => todo!(),
-                SpacingRule::Ignore => None,
-            }
+            config.spacing.alphabets
         }
-        _ => None,
+        _ => SpacingRule::Ignore,
     }
 }
 
 fn char_type(c: char) -> CharType {
+    // Only ASCII spaces are editable. Other whitespace must also prevent a
+    // spacing pair from spanning it, including U+3000 in the broad CJK range.
+    match c {
+        ' ' | '\r' | '\n' => return CharType::Space,
+        _ if c.is_whitespace() => return CharType::Other,
+        _ => {}
+    }
+
     // TODO: Refine the character set by reviewing https://www.unicode.org/charts/
     match c {
         // CJK Unified Ideographs
@@ -100,25 +169,20 @@ fn char_type(c: char) -> CharType {
         // Bopomofo: U+3100–U+312F
         | '\u{3100}'..='\u{312F}'
         // Hangul Syllables: U+AC00–U+D7AF
-        | '\u{AC00}'..='\u{D7AF}'
-        => {
-             match get_general_category(c) {
-                 // Exclude punctuation charactersØ
-                GeneralCategory::ClosePunctuation
-                | GeneralCategory::ConnectorPunctuation
-                | GeneralCategory::DashPunctuation
-                | GeneralCategory::FinalPunctuation
-                | GeneralCategory::InitialPunctuation
-                | GeneralCategory::OpenPunctuation
-                | GeneralCategory::OtherPunctuation
-                => CharType::Other,
-                _ => CharType::Cjk,
-            }
+        | '\u{AC00}'..='\u{D7AF}' => match get_general_category(c) {
+            // Exclude punctuation characters.
+            GeneralCategory::ClosePunctuation
+            | GeneralCategory::ConnectorPunctuation
+            | GeneralCategory::DashPunctuation
+            | GeneralCategory::FinalPunctuation
+            | GeneralCategory::InitialPunctuation
+            | GeneralCategory::OpenPunctuation
+            | GeneralCategory::OtherPunctuation => CharType::Other,
+            _ => CharType::Cjk,
         },
 
-        // Basic Latin : Uppercase letters
+        // Basic Latin : Uppercase and lowercase letters
         'A'..='Z'
-        // Basic Latin : Lowercase letters
         | 'a'..='z'
         // Latin-1 Supplement
         | '\u{00C0}'..='\u{00FF}'
@@ -147,16 +211,11 @@ fn char_type(c: char) -> CharType {
         // Latin Extended-F
         | '\u{10780}'..='\u{107BF}'
         // Latin Extended-G
-        | '\u{1DF00}'..='\u{1DFFF}'
-        => CharType::Latin, // Basic Latin
+        | '\u{1DF00}'..='\u{1DFFF}' => CharType::Latin,
 
         // Half-width digits
         '0'..='9' => CharType::Digit,
 
-        // Whitespace characters
-        ' ' | '\r' | '\n' => CharType::Space,
-
-        // Other characters
         _ => CharType::Other,
     }
 }
@@ -165,12 +224,78 @@ fn char_type(c: char) -> CharType {
 mod tests {
     use super::*;
 
+    fn make_config(alphabets: SpacingRule, digits: SpacingRule) -> Config {
+        let mut config = Config::default();
+        config.spacing.alphabets = alphabets;
+        config.spacing.digits = digits;
+        config
+    }
+
+    fn edits(config: &Config, text: &str) -> Vec<(Range<usize>, String)> {
+        spacing_edits(config, text)
+            .into_iter()
+            .map(|edit| (edit.range, edit.replacement))
+            .collect()
+    }
+
     #[test]
-    fn test_char_type() {
-        assert!(char_type('中') == CharType::Cjk);
-        assert!(char_type('漢') == CharType::Cjk);
-        assert!(char_type('a') == CharType::Latin);
-        assert!(char_type('1') == CharType::Digit);
-        assert!(char_type(' ') == CharType::Space);
+    fn require_inserts_at_utf8_byte_boundaries_in_both_directions() {
+        let config = make_config(SpacingRule::Require, SpacingRule::Require);
+        assert_eq!(
+            edits(&config, "漢A1漢"),
+            vec![(3..3, " ".to_string()), (5..5, " ".to_string())]
+        );
+    }
+
+    #[test]
+    fn require_does_not_duplicate_existing_ascii_space() {
+        let config = make_config(SpacingRule::Require, SpacingRule::Require);
+        assert!(spacing_edits(&config, "漢 A").is_empty());
+    }
+
+    #[test]
+    fn prohibit_deletes_a_complete_ascii_space_run() {
+        let config = make_config(SpacingRule::Prohibit, SpacingRule::Prohibit);
+        assert_eq!(edits(&config, "漢   A  1"), vec![(3..6, String::new())]);
+    }
+
+    #[test]
+    fn prohibit_does_not_cross_non_ascii_space_or_line_endings() {
+        let config = make_config(SpacingRule::Prohibit, SpacingRule::Prohibit);
+        for text in ["漢\tA", "漢\nA", "漢\r\nA", "漢\u{00a0}A", "漢\u{3000}A"] {
+            assert!(spacing_edits(&config, text).is_empty(), "changed {text:?}");
+        }
+    }
+
+    #[test]
+    fn alphabet_and_digit_rules_are_independent() {
+        let config = make_config(SpacingRule::Require, SpacingRule::Ignore);
+        assert_eq!(
+            edits(&config, "漢A漢1"),
+            vec![(3..3, " ".to_string()), (4..4, " ".to_string())]
+        );
+
+        let digit_config = make_config(SpacingRule::Ignore, SpacingRule::Prohibit);
+        assert_eq!(
+            edits(&digit_config, "漢 A 漢  1"),
+            vec![(9..11, String::new())]
+        );
+    }
+
+    #[test]
+    fn ignore_leaves_both_kinds_unchanged() {
+        let config = make_config(SpacingRule::Ignore, SpacingRule::Ignore);
+        assert!(spacing_edits(&config, "漢A 漢 1").is_empty());
+    }
+
+    #[test]
+    fn character_types_keep_punctuation_out_of_spacing_pairs() {
+        assert_eq!(char_type('中'), CharType::Cjk);
+        assert_eq!(char_type('漢'), CharType::Cjk);
+        assert_eq!(char_type('a'), CharType::Latin);
+        assert_eq!(char_type('1'), CharType::Digit);
+        assert_eq!(char_type(' '), CharType::Space);
+        assert_eq!(char_type('。'), CharType::Other);
+        assert_eq!(char_type('\u{3000}'), CharType::Other);
     }
 }

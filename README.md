@@ -15,7 +15,8 @@
 
 ## Configuration
 
-cjkfmt can be configured in several ways, with configuration options applied in the following order of precedence (highest to lowest):
+cjkfmt can be configured in several ways, with configuration options applied in the following order
+of precedence (highest to lowest):
 
 1. Command line options
 2. Environment variables prefixed with `CJKFMT_`
@@ -24,7 +25,8 @@ cjkfmt can be configured in several ways, with configuration options applied in 
    (`XDG_CONFIG_HOME` if set, otherwise `$HOME`)
 5. Default values
 
-The configuration file is searched for in the current directory and, if not found, in each parent directory up to the root. Only the first file found will be used.
+The configuration file is searched for in the current directory and, if not found, in each parent
+directory up to the root. Only the first file found will be used.
 
 ### Configuration Options
 
@@ -52,6 +54,11 @@ Depending on the configuration source, the option names are formatted slightly d
     `--spacing-alphabets require`, and `--spacing-digits prohibit`
 
 ### Example Configuration File
+
+The `format` command applies the spacing rules to Markdown prose, including visible text inside
+emphasis and links. Code spans, fenced code blocks, URLs, HTML, and other non-prose inline content
+are left unchanged. For the implementation-level character classification and the difference between
+`check` and `format`, see [the spacing implementation notes](docs/design/spacing.md).
 
 Below is an example configuration file `.cjkfmt.json`.
 

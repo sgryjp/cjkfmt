@@ -45,3 +45,32 @@ where
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::*;
+    use crate::config::SpacingRule;
+
+    #[test]
+    fn check_command_keeps_markdown_fallback_for_uppercase_json_files() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("document.JSON");
+        fs::write(&path, "漢A\n").unwrap();
+
+        let mut config = Config {
+            max_width: 200,
+            ..Config::default()
+        };
+        config.spacing.alphabets = SpacingRule::Require;
+
+        let mut output = Vec::new();
+        check_command(&mut output, &config, &[&path]).unwrap();
+
+        assert!(
+            String::from_utf8(output).unwrap().contains("W002"),
+            "uppercase .JSON should retain the Markdown grammar fallback"
+        );
+    }
+}

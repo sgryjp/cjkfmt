@@ -133,7 +133,23 @@ mod tests {
     }
 
     #[test]
-    fn debug_cst_command_uses_json_grammar_for_json_files() {
+    fn debug_cst_command_uses_markdown_grammar_for_uppercase_json_files() {
+        let path = make_temp_path("JSON");
+        fs::write(&path, "# Test\n").unwrap();
+
+        let mut stdout = Vec::new();
+        let mut stdin = "".as_bytes();
+        debug_cst_command_with_reader(&mut stdout, &[&path], &mut stdin).unwrap();
+
+        let actual = String::from_utf8(stdout).unwrap();
+        assert!(actual.contains("(section [0, 0] - [1, 0]"));
+        assert!(!actual.contains("(object "));
+
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn debug_cst_command_uses_json_grammar_for_lowercase_json_files() {
         let path = make_temp_path("json");
         fs::write(&path, "{\"name\":1}\n").unwrap();
 
