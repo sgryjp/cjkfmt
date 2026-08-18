@@ -99,6 +99,20 @@ impl Default for SpacingConfig {
     }
 }
 
+/// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+pub enum AmbiguousWidth {
+    /// Treat characters in the Ambiguous category as 1.
+    // `halfwidth` is kept as a friendlier synonym some users may reach for.
+    #[serde(alias = "halfwidth")]
+    Narrow,
+
+    /// Treat characters in the Ambiguous category as 2.
+    #[serde(alias = "fullwidth")]
+    Wide,
+}
+
 #[cfg(test)]
 mod tests {
     use clap::Parser;
@@ -221,18 +235,4 @@ mod tests {
             None => assert!(result.is_err(), "non-snake_case value should be rejected"),
         }
     }
-}
-
-/// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
-#[serde(rename_all = "snake_case")]
-pub enum AmbiguousWidth {
-    /// Treat characters in the Ambiguous category as 1.
-    // `halfwidth` is kept as a friendlier synonym some users may reach for.
-    #[serde(alias = "halfwidth")]
-    Narrow,
-
-    /// Treat characters in the Ambiguous category as 2.
-    #[serde(alias = "fullwidth")]
-    Wide,
 }

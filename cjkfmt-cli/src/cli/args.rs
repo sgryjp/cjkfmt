@@ -85,6 +85,34 @@ impl Provider for CliArgs {
     }
 }
 
+#[derive(Subcommand, Debug, Deserialize, Serialize)]
+pub enum Commands {
+    /// Format files according to CJK text formatting rules.
+    Format {
+        /// Replace each input file with its formatted content instead of writing to stdout.
+        #[arg(short, long, requires = "filenames")]
+        write: bool,
+
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
+
+    /// Check whether formatting is correct without modifying the files.
+    Check {
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
+
+    /// Print the parsed concrete syntax tree for debugging.
+    DebugCst {
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use figment::{Figment, providers::Serialized};
@@ -186,32 +214,4 @@ mod tests {
         assert_eq!(config.spacing.alphabets, SpacingRule::Require);
         assert_eq!(config.spacing.digits, SpacingRule::Prohibit);
     }
-}
-
-#[derive(Subcommand, Debug, Deserialize, Serialize)]
-pub enum Commands {
-    /// Format files according to CJK text formatting rules.
-    Format {
-        /// Replace each input file with its formatted content instead of writing to stdout.
-        #[arg(short, long, requires = "filenames")]
-        write: bool,
-
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
-    },
-
-    /// Check whether formatting is correct without modifying the files.
-    Check {
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
-    },
-
-    /// Print the parsed concrete syntax tree for debugging.
-    DebugCst {
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
-    },
 }
