@@ -10,9 +10,10 @@ pub fn format_command<W: std::io::Write, P: AsRef<Path>>(
     stdout: &mut W,
     config: &Config,
     filenames: &[P],
+    write: bool,
 ) -> anyhow::Result<()> {
     let mut stdin = stdin();
-    format_command_with_reader(stdout, config, filenames, &mut stdin)
+    format_command_with_reader(stdout, config, filenames, write, &mut stdin)
 }
 
 fn is_markdown_path(path: &Path) -> bool {
@@ -27,6 +28,7 @@ fn format_command_with_reader<W, P, R>(
     stdout: &mut W,
     config: &Config,
     filenames: &[P],
+    write: bool,
     stdin: &mut R,
 ) -> anyhow::Result<()>
 where
@@ -34,10 +36,10 @@ where
     P: AsRef<Path>,
     R: Read,
 {
-    // Read content of the specified files or standard input. Without a
-    // filename, the input type is unknown, so Markdown spacing is opt-in
-    // rather than assumed.
-    if filenames.is_empty() {
+    // Read content of standard input only for normal stdout mode. The CLI
+    // requires a filename when `--write` is set, so write mode never attempts
+    // to consume stdin.
+    if filenames.is_empty() && !write {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
         format_one_file(stdout, config, false, &content)?;
@@ -46,7 +48,14 @@ where
             let filename = filename.as_ref();
             let apply_markdown_spacing = is_markdown_path(filename);
             let content = fs::read_to_string(filename)?;
-            format_one_file(stdout, config, apply_markdown_spacing, &content)?;
+
+            if write {
+                let mut formatted = Vec::new();
+                format_one_file(&mut formatted, config, apply_markdown_spacing, &content)?;
+                fs::write(filename, formatted)?;
+            } else {
+                format_one_file(stdout, config, apply_markdown_spacing, &content)?;
+            }
         }
     }
     Ok(())
@@ -92,12 +101,34 @@ mod tests {
         }
 
         let mut output = Vec::new();
-        format_command(&mut output, &config(), &paths).unwrap();
+        format_command(&mut output, &config(), &paths, false).unwrap();
 
         let expected: String = cases.iter().map(|(_, output)| *output).collect();
         assert_eq!(String::from_utf8(output).unwrap(), expected);
+        for (filename, _) in cases {
+            assert_eq!(
+                fs::read_to_string(directory.path().join(filename)).unwrap(),
+                "漢A\n"
+            );
+        }
         // `TempDir` removes the directory during unwinding as well as on
         // success, so assertion failures do not leave test files behind.
+    }
+
+    #[test]
+    fn format_command_writes_formatted_content_to_each_named_file_without_stdout() {
+        let directory = tempdir().unwrap();
+        let markdown = directory.path().join("document.md");
+        let text = directory.path().join("document.txt");
+        fs::write(&markdown, "漢A\n").unwrap();
+        fs::write(&text, "漢A\n").unwrap();
+
+        let mut output = Vec::new();
+        format_command(&mut output, &config(), &[&markdown, &text], true).unwrap();
+
+        assert!(output.is_empty());
+        assert_eq!(fs::read_to_string(markdown).unwrap(), "漢 A\n");
+        assert_eq!(fs::read_to_string(text).unwrap(), "漢A\n");
     }
 
     #[test]
@@ -105,7 +136,8 @@ mod tests {
         let mut input = "漢A\n".as_bytes();
         let mut output = Vec::new();
 
-        format_command_with_reader(&mut output, &config(), &[] as &[PathBuf], &mut input).unwrap();
+        format_command_with_reader(&mut output, &config(), &[] as &[PathBuf], false, &mut input)
+            .unwrap();
 
         assert_eq!(String::from_utf8(output).unwrap(), "漢A\n");
     }

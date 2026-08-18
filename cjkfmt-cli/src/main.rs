@@ -44,8 +44,8 @@ fn main() -> anyhow::Result<()> {
         args::Commands::DebugCst { filenames } => {
             debug_cst_command(&mut stdout, filenames.as_slice())?
         }
-        args::Commands::Format { filenames } => {
-            format_command(&mut stdout, &config, filenames.as_slice())?
+        args::Commands::Format { write, filenames } => {
+            format_command(&mut stdout, &config, filenames.as_slice(), write)?
         }
     }
 

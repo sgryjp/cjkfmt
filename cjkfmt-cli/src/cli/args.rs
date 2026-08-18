@@ -104,6 +104,29 @@ mod tests {
             .expect("CLI values should deserialize as configuration")
     }
 
+    #[rstest]
+    #[case("--write")]
+    #[case("-w")]
+    fn format_write_flag_accepts_a_filename(#[case] flag: &str) {
+        let args = CliArgs::try_parse_from(["cjkfmt", "format", flag, "file.md"])
+            .expect("the write command-line arguments should parse");
+
+        match args.command {
+            Commands::Format { write, filenames } => {
+                assert!(write);
+                assert_eq!(filenames, [PathBuf::from("file.md")]);
+            }
+            _ => panic!("expected format command"),
+        }
+    }
+
+    #[test]
+    fn format_write_flag_requires_a_filename() {
+        let result = CliArgs::try_parse_from(["cjkfmt", "format", "--write"]);
+
+        assert!(result.is_err());
+    }
+
     #[test]
     fn max_width_flag_maps_clap_value_to_config() {
         let config = config_from(["cjkfmt", "--max-width", "42", "format"]);
@@ -169,6 +192,10 @@ mod tests {
 pub enum Commands {
     /// Format files according to CJK text formatting rules.
     Format {
+        /// Replace each input file with its formatted content instead of writing to stdout.
+        #[arg(short, long, requires = "filenames")]
+        write: bool,
+
         /// File(s) to process.
         #[arg()]
         filenames: Vec<PathBuf>,

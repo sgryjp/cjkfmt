@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `cjkfmt format --write` to replace named files with their formatted content.
 - `cjkfmt format` now applies configured CJK/ASCII spacing rules to Markdown prose.
 - Added the CLI options for config override: `--ambiguous-width`, `--spacing-alphabets`,
   `--spacing-digits`, and `--spacing-punctuation-as-fullwidth`.

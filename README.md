@@ -13,6 +13,16 @@
   [this](https://www.rust-lang.org/tools/install) guide.
 - run `cargo install cjkfmt`
 
+## Formatting Files
+
+To replace named files with their formatted content, use the `--write` option:
+
+```console
+cjkfmt format --write README.md docs/example.md
+```
+
+Omitting `--write` leaves the source files unchanged and sends formatted content to stdout.
+
 ## Configuration
 
 cjkfmt can be configured in several ways, with configuration options applied in the following order
