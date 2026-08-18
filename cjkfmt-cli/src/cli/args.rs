@@ -85,6 +85,34 @@ impl Provider for CliArgs {
     }
 }
 
+#[derive(Subcommand, Debug, Deserialize, Serialize)]
+pub enum Commands {
+    /// Format files according to CJK text formatting rules.
+    Format {
+        /// Replace each input file with its formatted content instead of writing to stdout.
+        #[arg(short, long, requires = "filenames")]
+        write: bool,
+
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
+
+    /// Check whether formatting is correct without modifying the files.
+    Check {
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
+
+    /// Print the parsed concrete syntax tree for debugging.
+    DebugCst {
+        /// File(s) to process.
+        #[arg()]
+        filenames: Vec<PathBuf>,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use figment::{Figment, providers::Serialized};
@@ -102,6 +130,29 @@ mod tests {
             .merge(&args)
             .extract()
             .expect("CLI values should deserialize as configuration")
+    }
+
+    #[rstest]
+    #[case("--write")]
+    #[case("-w")]
+    fn format_write_flag_accepts_a_filename(#[case] flag: &str) {
+        let args = CliArgs::try_parse_from(["cjkfmt", "format", flag, "file.md"])
+            .expect("the write command-line arguments should parse");
+
+        match args.command {
+            Commands::Format { write, filenames } => {
+                assert!(write);
+                assert_eq!(filenames, [PathBuf::from("file.md")]);
+            }
+            _ => panic!("expected format command"),
+        }
+    }
+
+    #[test]
+    fn format_write_flag_requires_a_filename() {
+        let result = CliArgs::try_parse_from(["cjkfmt", "format", "--write"]);
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -163,28 +214,4 @@ mod tests {
         assert_eq!(config.spacing.alphabets, SpacingRule::Require);
         assert_eq!(config.spacing.digits, SpacingRule::Prohibit);
     }
-}
-
-#[derive(Subcommand, Debug, Deserialize, Serialize)]
-pub enum Commands {
-    /// Format files according to CJK text formatting rules.
-    Format {
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
-    },
-
-    /// Check whether formatting is correct without modifying the files.
-    Check {
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
-    },
-
-    /// Print the parsed concrete syntax tree for debugging.
-    DebugCst {
-        /// File(s) to process.
-        #[arg()]
-        filenames: Vec<PathBuf>,
-    },
 }
