@@ -10,8 +10,6 @@ assignees: ""
 
 <!-- A clear and concise description of what the bug is. -->
 
-- Would you like to work on a fix? [y/n]
-
 ## To Reproduce
 
 Steps to reproduce the behavior:
