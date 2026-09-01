@@ -2,7 +2,9 @@ use tree_sitter::{Parser, Tree};
 
 use crate::Grammar;
 use crate::errors::CjkfmtParseError;
-use crate::ffi::{tree_sitter_json, tree_sitter_markdown, tree_sitter_markdown_inline};
+use crate::ffi::{
+    tree_sitter_json, tree_sitter_markdown, tree_sitter_markdown_inline, tree_sitter_python,
+};
 
 /// Parses the given content string using the specified grammar and returns a syntax tree.
 pub fn parse(grammar: Grammar, content: &str) -> Result<Tree, CjkfmtParseError> {
@@ -10,6 +12,7 @@ pub fn parse(grammar: Grammar, content: &str) -> Result<Tree, CjkfmtParseError> 
     let language = unsafe {
         match grammar {
             Grammar::Json => tree_sitter_json(),
+            Grammar::Python => tree_sitter_python(),
             Grammar::Markdown => tree_sitter_markdown(),
             Grammar::MarkdownInline => tree_sitter_markdown_inline(),
         }
@@ -28,6 +31,24 @@ pub fn parse(grammar: Grammar, content: &str) -> Result<Tree, CjkfmtParseError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn python_grammar_exposes_docstring_and_string_content_shape() {
+        let tree = parse(
+            Grammar::Python,
+            r#"def f():
+    """漢A"""
+"#,
+        )
+        .unwrap();
+        let function = tree.root_node().named_child(0).unwrap();
+        assert_eq!(function.kind(), "function_definition");
+        let body = function.child_by_field_name("body").unwrap();
+        let string = body.named_child(0).unwrap();
+        assert_eq!(string.kind(), "string");
+        assert_eq!(string.named_child(1).unwrap().kind(), "string_content");
+        assert!(!tree.root_node().has_error());
+    }
 
     #[test]
     fn markdown_inline_grammar_parses_plain_text() {

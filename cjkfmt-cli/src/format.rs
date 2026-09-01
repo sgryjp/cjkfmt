@@ -1,23 +1,33 @@
 use crate::{
     config::Config,
+    formatting_ranges::{apply_range_spacing, formatting_ranges},
     line_break::{BreakPoint, LineBreaker},
     markdown_spacing::apply_markdown_spacing,
 };
 use cjkfmt_core::lines_inclusive::LinesInclusiveExt;
+use cjkfmt_parser::{Grammar, parse};
 
 pub(crate) fn format_one_file<W: std::io::Write>(
     stdout: &mut W,
     config: &Config,
+    grammar: Grammar,
     apply_spacing: bool,
     content: &str,
 ) -> Result<(), anyhow::Error> {
-    // Keep Markdown spacing selection separate from line wrapping. Both
-    // Markdown and non-Markdown inputs retain the existing wrapping pass.
-    let content = if apply_spacing {
-        apply_markdown_spacing(config, content)?
-    } else {
-        content.to_owned()
+    let content = match grammar {
+        Grammar::Markdown if apply_spacing => apply_markdown_spacing(config, content)?,
+        Grammar::Markdown => content.to_owned(),
+        Grammar::Python => {
+            let tree = parse(Grammar::Python, content)?;
+            let ranges = formatting_ranges(Grammar::Python, tree.root_node(), content)?;
+            apply_range_spacing(config, content, &ranges)?
+        }
+        _ => content.to_owned(),
     };
+    if grammar == Grammar::Python {
+        write!(stdout, "{content}")?;
+        return Ok(());
+    }
 
     let line_breaker = LineBreaker::builder()
         .ambiguous_width(config.ambiguous_width)
@@ -62,13 +72,38 @@ mod tests {
 
     fn format(apply_markdown_spacing: bool, source: &str) -> String {
         let mut output = Vec::new();
-        format_one_file(&mut output, &config(), apply_markdown_spacing, source).unwrap();
+        let grammar = if apply_markdown_spacing {
+            Grammar::Markdown
+        } else {
+            Grammar::Json
+        };
+        format_one_file(
+            &mut output,
+            &config(),
+            grammar,
+            apply_markdown_spacing,
+            source,
+        )
+        .unwrap();
         String::from_utf8(output).unwrap()
     }
 
     #[test]
     fn format_applies_configured_spacing_to_markdown_prose() {
         assert_eq!(format(true, "漢A\n"), "漢 A\n");
+    }
+
+    #[test]
+    fn python_format_does_not_wrap_code_or_selected_content() {
+        let mut config = config();
+        config.max_width = 5;
+        let source = "# 漢A very long comment\ndef f():\n    \"漢A very long docstring\"\n    return \"漢A\"\n";
+        let mut output = Vec::new();
+        format_one_file(&mut output, &config, Grammar::Python, true, source).unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "# 漢 A very long comment\ndef f():\n    \"漢 A very long docstring\"\n    return \"漢A\"\n"
+        );
     }
 
     #[test]

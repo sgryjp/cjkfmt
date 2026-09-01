@@ -4,6 +4,7 @@ mod cli;
 mod config;
 mod document;
 mod format;
+mod formatting_ranges;
 mod line_break;
 mod markdown_spacing;
 mod spacing;
@@ -164,8 +165,14 @@ mod file_based_tests {
         let mut actual: Vec<u8> = Vec::with_capacity(1024);
 
         // Run the formatter on the input
-        format_one_file(&mut actual, &test_case.config, true, &test_case.input)
-            .unwrap_or_else(|_| panic!("failed on formatting a file: {resource:?}"));
+        format_one_file(
+            &mut actual,
+            &test_case.config,
+            cjkfmt_parser::Grammar::Markdown,
+            true,
+            &test_case.input,
+        )
+        .unwrap_or_else(|_| panic!("failed on formatting a file: {resource:?}"));
 
         // Compare the actual output with the expected output
         assert_eq!(String::from_utf8_lossy(&actual), test_case.output);

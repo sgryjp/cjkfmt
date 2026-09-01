@@ -56,6 +56,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             subdir: ".",
             source: vec!["src/parser.c"],
         },
+        GrammarSpec {
+            library_name: "python",
+            repo_url: Url::parse("https://github.com/tree-sitter/tree-sitter-python.git").unwrap(),
+            rev: "26855eabccb19c6abf499fbc5b8dc7cc9ab8bc64",
+            subdir: ".",
+            source: vec!["src/parser.c", "src/scanner.c"],
+        },
     ];
 
     // Determine path to where the grammars will be cloned

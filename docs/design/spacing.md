@@ -17,11 +17,10 @@ This specification covers the following behavior:
 
 - classifying Unicode scalar values into cjkfmt character categories;
 - deciding whether ASCII spaces are required, prohibited, or ignored between adjacent categories;
-- applying those rules to Markdown prose; and
-- reporting the same Markdown prose violations through `check` that `format` can correct.
+- applying those rules to Markdown prose and Python formatting content; and
+- reporting the same selected violations through `check` that `format` can correct.
 
-It does not define general whitespace normalization, spacing between Latin characters and digits,
-or spacing behavior for source-code languages and other document formats.
+It does not define general whitespace normalization or spacing between Latin characters and digits.
 
 ## Character categories
 
@@ -149,19 +148,30 @@ Spacing rules do not modify or diagnose the following non-prose content:
 When Markdown cannot be interpreted safely, cjkfmt must preserve the affected construct rather
 than partially formatting or diagnosing its contents.
 
+## Python formatting content
+
+For `.py` and `.PY` files, formatting content is every comment body and the literal text of the
+semantic docstring of a module, class, or function, including nested, decorated, async, and method
+definitions. Parenthesized and implicitly concatenated non-bytes, non-f-string literals are
+included; each literal is processed independently. Quotes, prefixes, indentation, escape sequences,
+and
+boundaries between adjacent literals are never edited. Docstring contents are not parsed for doctest
+or markup syntax. Ordinary strings and Python code are unchanged.
+
+If the Python syntax tree contains an error, formatting makes no spacing changes and checking emits
+no Python `W002` diagnostics. `debug-cst` still displays the recovery tree. Python formatting does
+not perform line wrapping; `W001` continues to inspect every line.
+
 ## Checking and formatting
 
-For the same Markdown input and configuration, `check` and `format` must select the same prose
-content and apply the same spacing rules.
+For the same input and configuration, `check` and `format` must select the same content and apply
+the same spacing rules.
 
 - `check` must report a spacing diagnostic exactly where `format` would make a spacing change.
 - `format` must make every spacing change reported by `check` when run with the same configuration.
 - Neither command may act on content excluded by the Markdown prose rules above.
 
-This is the intended contract. The current checker does not yet share all of the formatter's
-Markdown prose selection rules; the conformance gap is tracked in [issue #91].
-
-[issue #91]: https://github.com/sgryjp/cjkfmt/issues/91
+This is the intended contract for both Markdown and Python formatting content.
 
 ## Non-goals
 
@@ -170,4 +180,5 @@ This specification does not require cjkfmt to:
 - normalize arbitrary whitespace or convert one whitespace character to another;
 - insert or remove spaces for Latin–Digit, CJK–CJK, or other ineligible pairs;
 - treat all Unicode decimal digits as Digit; or
-- apply Markdown prose rules to non-Markdown documents.
+- apply Markdown prose rules to non-Markdown documents; or
+- reflow Python code or prose lines.

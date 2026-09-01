@@ -133,6 +133,23 @@ mod tests {
     }
 
     #[test]
+    fn debug_cst_command_routes_python_case_insensitively() {
+        let path = make_temp_path("PY");
+        fs::write(&path, "def f():\n    \"doc\"\n").unwrap();
+
+        let mut stdout = Vec::new();
+        let mut stdin = "".as_bytes();
+        debug_cst_command_with_reader(&mut stdout, &[&path], &mut stdin).unwrap();
+
+        assert!(
+            String::from_utf8(stdout)
+                .unwrap()
+                .contains("(function_definition [0, 0]")
+        );
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn debug_cst_command_uses_markdown_grammar_for_uppercase_json_files() {
         let path = make_temp_path("JSON");
         fs::write(&path, "# Test\n").unwrap();

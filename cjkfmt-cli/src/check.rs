@@ -5,6 +5,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use crate::{
     config::Config,
     document::Document,
+    formatting_ranges::formatting_ranges,
     line_break::{BreakPoint, LineBreaker},
     spacing_checker::SpacingChecker,
 };
@@ -33,12 +34,56 @@ pub(crate) fn check_one_file(
         }
     }
 
-    // Check spacing problems
-    let mut spacing_checker = SpacingChecker::new(config, document);
-    spacing_checker.walk(tree);
-    diagnostics.extend(spacing_checker.diagnostics().iter().cloned());
+    // Check spacing problems. Python uses the same source ranges as format;
+    // malformed trees intentionally produce no Python W002 diagnostics.
+    if document.grammar == cjkfmt_parser::Grammar::Python {
+        let ranges = formatting_ranges(document.grammar, tree.root_node(), &document.content)?;
+        for range in ranges {
+            let text = &document.content[range.clone()];
+            for edit in crate::spacing::spacing_edits(config, text) {
+                let start = range.start + edit.range.start;
+                let end = range.start + edit.range.end;
+                diagnostics.push(diagnostic_for_absolute_edit(document, &edit, start, end));
+            }
+        }
+    } else {
+        let mut spacing_checker = SpacingChecker::new(config, document);
+        spacing_checker.walk(tree);
+        diagnostics.extend(spacing_checker.diagnostics().iter().cloned());
+    }
 
     Ok(diagnostics)
+}
+
+fn diagnostic_for_absolute_edit(
+    document: &Document,
+    edit: &crate::spacing::TextEdit,
+    start: usize,
+    end: usize,
+) -> Diagnostic {
+    let before = &document.content[..start];
+    let line = before.chars().filter(|&c| c == '\n').count() as u32;
+    let column = before
+        .rsplit_once('\n')
+        .map_or(before, |(_, s)| s)
+        .encode_utf16()
+        .count() as u32;
+    let end_column = if edit.range.is_empty() {
+        column
+            + document.content[start..]
+                .graphemes(true)
+                .next()
+                .map_or(0, |g| g.encode_utf16().count() as u32)
+    } else {
+        column + document.content[start..end].encode_utf16().count() as u32
+    };
+    Diagnostic::new(
+        document.filename.as_deref(),
+        Position::new(line, column),
+        Position::new(line, end_column),
+        "W002".to_string(),
+        "Possible spacing position found".to_string(),
+    )
 }
 
 fn check_line_length(

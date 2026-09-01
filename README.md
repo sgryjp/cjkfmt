@@ -66,7 +66,9 @@ Depending on the configuration source, the option names are formatted slightly d
 ### Example Configuration File
 
 The `format` command applies the spacing rules to Markdown prose, including visible text inside
-emphasis and links. Code spans, fenced code blocks, URLs, HTML, and other non-prose inline content
+emphasis and links. It also handles `.py` and `.PY` files: comments and module/class/function
+docstrings are formatted without changing Python code, quotes, prefixes, or escapes. Python input is
+never line-wrapped. Code spans, fenced code blocks, URLs, HTML, and other non-prose inline content
 are left unchanged. For the implementation-level character classification and the difference between
 `check` and `format`, see [the spacing implementation notes](docs/design/spacing.md).
 

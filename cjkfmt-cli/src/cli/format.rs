@@ -4,6 +4,8 @@ use std::{
     path::Path,
 };
 
+use cjkfmt_parser::grammar_from_path;
+
 use crate::{config::Config, format::format_one_file};
 
 pub fn format_command<W: std::io::Write, P: AsRef<Path>>(
@@ -14,14 +16,6 @@ pub fn format_command<W: std::io::Write, P: AsRef<Path>>(
 ) -> anyhow::Result<()> {
     let mut stdin = stdin();
     format_command_with_reader(stdout, config, filenames, write, &mut stdin)
-}
-
-fn is_markdown_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
-        })
 }
 
 fn format_command_with_reader<W, P, R>(
@@ -42,19 +36,33 @@ where
     if filenames.is_empty() && !write {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        format_one_file(stdout, config, false, &content)?;
+        format_one_file(
+            stdout,
+            config,
+            cjkfmt_parser::Grammar::Markdown,
+            false,
+            &content,
+        )?;
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let apply_markdown_spacing = is_markdown_path(filename);
+            let grammar = grammar_from_path(filename);
+            let apply_spacing = filename
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| {
+                    e.eq_ignore_ascii_case("md")
+                        || e.eq_ignore_ascii_case("markdown")
+                        || e.eq_ignore_ascii_case("py")
+                });
             let content = fs::read_to_string(filename)?;
 
             if write {
                 let mut formatted = Vec::new();
-                format_one_file(&mut formatted, config, apply_markdown_spacing, &content)?;
+                format_one_file(&mut formatted, config, grammar, apply_spacing, &content)?;
                 fs::write(filename, formatted)?;
             } else {
-                format_one_file(stdout, config, apply_markdown_spacing, &content)?;
+                format_one_file(stdout, config, grammar, apply_spacing, &content)?;
             }
         }
     }
@@ -113,6 +121,22 @@ mod tests {
         }
         // `TempDir` removes the directory during unwinding as well as on
         // success, so assertion failures do not leave test files behind.
+    }
+
+    #[test]
+    fn format_command_routes_py_and_uppercase_py_to_python_spacing_without_wrapping() {
+        let directory = tempdir().unwrap();
+        let lower = directory.path().join("script.py");
+        let upper = directory.path().join("script.PY");
+        let source = "# 漢A\ndef f():\n    \"漢A\"\n    return \"漢A\"\n";
+        fs::write(&lower, source).unwrap();
+        fs::write(&upper, source).unwrap();
+
+        let mut output = Vec::new();
+        format_command(&mut output, &config(), &[&lower, &upper], false).unwrap();
+
+        let expected = "# 漢 A\ndef f():\n    \"漢 A\"\n    return \"漢A\"\n";
+        assert_eq!(String::from_utf8(output).unwrap(), expected.repeat(2));
     }
 
     #[test]
