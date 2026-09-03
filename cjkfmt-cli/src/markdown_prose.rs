@@ -22,9 +22,9 @@ const EXCLUDED_NODE_KINDS: &[&str] = &[
     "backslash_escape",
 ];
 
-/// Applies configured spacing rules to Markdown prose while preserving inline
+/// Plans validated spacing edits for Markdown prose while preserving inline
 /// constructs whose contents are not displayed as ordinary prose.
-pub(crate) fn apply_markdown_spacing(config: &Config, source: &str) -> anyhow::Result<String> {
+pub(crate) fn plan_edits(config: &Config, source: &str) -> anyhow::Result<Vec<TextEdit>> {
     let block_tree = parse(Grammar::Markdown, source)?;
     let mut inline_ranges = Vec::new();
     collect_inline_ranges(block_tree.root_node(), &mut inline_ranges);
@@ -68,7 +68,8 @@ pub(crate) fn apply_markdown_spacing(config: &Config, source: &str) -> anyhow::R
         }
     }
 
-    apply_text_edits(source, edits)
+    validate_edits(source, &mut edits)?;
+    Ok(edits)
 }
 
 fn collect_inline_ranges(node: Node<'_>, ranges: &mut Vec<Range<usize>>) {
@@ -182,9 +183,9 @@ fn edit_intersects(edit: &Range<usize>, exclusion: &Range<usize>) -> bool {
     }
 }
 
-fn apply_text_edits(source: &str, mut edits: Vec<TextEdit>) -> anyhow::Result<String> {
+fn validate_edits(source: &str, edits: &mut [TextEdit]) -> anyhow::Result<()> {
     edits.sort_by_key(|edit| (edit.range.start, edit.range.end));
-    for edit in &edits {
+    for edit in edits.iter() {
         if edit.range.start > edit.range.end
             || edit.range.end > source.len()
             || !source.is_char_boundary(edit.range.start)
@@ -209,15 +210,7 @@ fn apply_text_edits(source: &str, mut edits: Vec<TextEdit>) -> anyhow::Result<St
         }
     }
 
-    if edits.is_empty() {
-        return Ok(source.to_string());
-    }
-
-    let mut formatted = source.to_string();
-    for edit in edits.into_iter().rev() {
-        formatted.replace_range(edit.range, &edit.replacement);
-    }
-    Ok(formatted)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -236,7 +229,12 @@ mod tests {
     }
 
     fn format(source: &str, alphabets: SpacingRule, digits: SpacingRule) -> String {
-        apply_markdown_spacing(&config(alphabets, digits), source).unwrap()
+        let mut formatted = source.to_string();
+        let edits = plan_edits(&config(alphabets, digits), source).unwrap();
+        for edit in edits.into_iter().rev() {
+            formatted.replace_range(edit.range, &edit.replacement);
+        }
+        formatted
     }
 
     #[test]
@@ -321,9 +319,46 @@ mod tests {
     }
 
     #[test]
+    fn returns_document_edits_in_ascending_source_order() {
+        let edits = plan_edits(
+            &config(SpacingRule::Require, SpacingRule::Require),
+            "漢A\n漢1\nA漢",
+        )
+        .unwrap();
+        assert_eq!(
+            edits
+                .iter()
+                .map(|edit| edit.range.clone())
+                .collect::<Vec<_>>(),
+            vec![3..3, 8..8, 11..11]
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_and_overlapping_edits() {
+        let mut invalid = vec![TextEdit {
+            range: 1..2,
+            replacement: String::new(),
+        }];
+        assert!(validate_edits("漢", &mut invalid).is_err());
+
+        let mut overlapping = vec![
+            TextEdit {
+                range: 0..1,
+                replacement: String::new(),
+            },
+            TextEdit {
+                range: 0..0,
+                replacement: " ".to_string(),
+            },
+        ];
+        assert!(validate_edits("漢", &mut overlapping).is_err());
+    }
+
+    #[test]
     fn validates_and_applies_edits_in_reverse_order() {
         let source = "漢A漢A";
-        let edits = vec![
+        let mut edits = vec![
             TextEdit {
                 range: 3..3,
                 replacement: " ".to_string(),
@@ -333,6 +368,11 @@ mod tests {
                 replacement: " ".to_string(),
             },
         ];
-        assert_eq!(apply_text_edits(source, edits).unwrap(), "漢 A漢 A");
+        validate_edits(source, &mut edits).unwrap();
+        let mut formatted = source.to_string();
+        for edit in edits.into_iter().rev() {
+            formatted.replace_range(edit.range, &edit.replacement);
+        }
+        assert_eq!(formatted, "漢 A漢 A");
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     config::Config,
     line_break::{BreakPoint, LineBreaker},
-    markdown_spacing::apply_markdown_spacing,
+    markdown_prose::plan_edits,
 };
 use cjkfmt_core::lines_inclusive::LinesInclusiveExt;
 
@@ -14,7 +14,11 @@ pub(crate) fn format_one_file<W: std::io::Write>(
     // Keep Markdown spacing selection separate from line wrapping. Both
     // Markdown and non-Markdown inputs retain the existing wrapping pass.
     let content = if apply_spacing {
-        apply_markdown_spacing(config, content)?
+        let mut content = content.to_owned();
+        for edit in plan_edits(config, content.as_str())?.into_iter().rev() {
+            content.replace_range(edit.range, &edit.replacement);
+        }
+        content
     } else {
         content.to_owned()
     };

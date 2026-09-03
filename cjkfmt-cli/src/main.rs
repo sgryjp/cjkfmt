@@ -5,7 +5,7 @@ mod config;
 mod document;
 mod format;
 mod line_break;
-mod markdown_spacing;
+mod markdown_prose;
 mod spacing;
 mod spacing_checker;
 
