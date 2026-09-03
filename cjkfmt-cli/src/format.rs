@@ -14,8 +14,9 @@ pub(crate) fn format_one_file<W: std::io::Write>(
     // Keep Markdown spacing selection separate from line wrapping. Both
     // Markdown and non-Markdown inputs retain the existing wrapping pass.
     let content = if apply_spacing {
+        let edits = plan_edits(config, content)?;
         let mut content = content.to_owned();
-        for edit in plan_edits(config, content.as_str())?.into_iter().rev() {
+        for edit in edits.into_iter().rev() {
             content.replace_range(edit.range, &edit.replacement);
         }
         content

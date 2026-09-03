@@ -16,10 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the CLI options for config override: `--ambiguous-width`, `--spacing-alphabets`,
   `--spacing-digits`, and `--spacing-punctuation-as-fullwidth`.
 
-### Changed
-
-- Centralized Markdown prose spacing edit planning for use by formatting and future checking.
-
 ### Fixed
 
 - Fixed spacing diagnostic columns for inline Markdown content that begins after the start of a
@@ -27,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Miscellaneous
 
+- Centralized Markdown prose spacing edit planning for use by formatting and future checking.
 - Refactored the space problem checker to work on the concrete syntax tree (CST) rather than
   processing plain text line by line.
 
