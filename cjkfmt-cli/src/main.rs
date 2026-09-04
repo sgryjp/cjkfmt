@@ -38,15 +38,19 @@ fn main() -> anyhow::Result<()> {
     yansi::whenever(condition);
 
     match args.command {
-        args::Commands::Check { filenames } => {
-            check_command(&mut stdout, &config, filenames.as_slice())?
-        }
-        args::Commands::DebugCst { filenames } => {
-            debug_cst_command(&mut stdout, filenames.as_slice())?
-        }
-        args::Commands::Format { write, filenames } => {
-            format_command(&mut stdout, &config, filenames.as_slice(), write)?
-        }
+        args::Commands::Check {
+            language,
+            filenames,
+        } => check_command(&mut stdout, &config, filenames.as_slice(), language)?,
+        args::Commands::DebugCst {
+            language,
+            filenames,
+        } => debug_cst_command(&mut stdout, filenames.as_slice(), language)?,
+        args::Commands::Format {
+            write,
+            language,
+            filenames,
+        } => format_command(&mut stdout, &config, filenames.as_slice(), write, language)?,
     }
 
     Ok(())

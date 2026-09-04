@@ -6,14 +6,17 @@ use std::{
 
 use crate::{config::Config, format::format_one_file};
 
+use super::args::Language;
+
 pub fn format_command<W: std::io::Write, P: AsRef<Path>>(
     stdout: &mut W,
     config: &Config,
     filenames: &[P],
     write: bool,
+    language: Option<Language>,
 ) -> anyhow::Result<()> {
     let mut stdin = stdin();
-    format_command_with_reader(stdout, config, filenames, write, &mut stdin)
+    format_command_with_reader(stdout, config, filenames, write, language, &mut stdin)
 }
 
 fn is_markdown_path(path: &Path) -> bool {
@@ -29,6 +32,7 @@ fn format_command_with_reader<W, P, R>(
     config: &Config,
     filenames: &[P],
     write: bool,
+    language: Option<Language>,
     stdin: &mut R,
 ) -> anyhow::Result<()>
 where
@@ -42,11 +46,18 @@ where
     if filenames.is_empty() && !write {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        format_one_file(stdout, config, false, &content)?;
+        format_one_file(
+            stdout,
+            config,
+            language == Some(Language::Markdown),
+            &content,
+        )?;
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let apply_markdown_spacing = is_markdown_path(filename);
+            let apply_markdown_spacing = language
+                .map(|language| language == Language::Markdown)
+                .unwrap_or_else(|| is_markdown_path(filename));
             let content = fs::read_to_string(filename)?;
 
             if write {
@@ -101,7 +112,7 @@ mod tests {
         }
 
         let mut output = Vec::new();
-        format_command(&mut output, &config(), &paths, false).unwrap();
+        format_command(&mut output, &config(), &paths, false, None).unwrap();
 
         let expected: String = cases.iter().map(|(_, output)| *output).collect();
         assert_eq!(String::from_utf8(output).unwrap(), expected);
@@ -124,7 +135,7 @@ mod tests {
         fs::write(&text, "漢A\n").unwrap();
 
         let mut output = Vec::new();
-        format_command(&mut output, &config(), &[&markdown, &text], true).unwrap();
+        format_command(&mut output, &config(), &[&markdown, &text], true, None).unwrap();
 
         assert!(output.is_empty());
         assert_eq!(fs::read_to_string(markdown).unwrap(), "漢 A\n");
@@ -136,9 +147,89 @@ mod tests {
         let mut input = "漢A\n".as_bytes();
         let mut output = Vec::new();
 
-        format_command_with_reader(&mut output, &config(), &[] as &[PathBuf], false, &mut input)
-            .unwrap();
+        format_command_with_reader(
+            &mut output,
+            &config(),
+            &[] as &[PathBuf],
+            false,
+            None,
+            &mut input,
+        )
+        .unwrap();
 
         assert_eq!(String::from_utf8(output).unwrap(), "漢A\n");
+    }
+
+    #[test]
+    fn format_command_language_override_controls_spacing_for_named_files() {
+        let directory = tempdir().unwrap();
+        let json = directory.path().join("document.json");
+        let markdown = directory.path().join("document.md");
+        fs::write(&json, "漢A\n").unwrap();
+        fs::write(&markdown, "漢A\n").unwrap();
+
+        let mut output = Vec::new();
+        format_command(
+            &mut output,
+            &config(),
+            &[&json, &markdown],
+            false,
+            Some(Language::Markdown),
+        )
+        .unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "漢 A\n漢 A\n");
+
+        let mut output = Vec::new();
+        format_command(
+            &mut output,
+            &config(),
+            &[&json, &markdown],
+            false,
+            Some(Language::Json),
+        )
+        .unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "漢A\n漢A\n");
+    }
+
+    #[test]
+    fn format_command_language_json_suppresses_spacing_but_still_wraps() {
+        let mut config = config();
+        config.max_width = 8;
+        let source = "漢A one two\n";
+        let mut input = source.as_bytes();
+        let mut output = Vec::new();
+        format_command_with_reader(
+            &mut output,
+            &config,
+            &[] as &[PathBuf],
+            false,
+            Some(Language::Json),
+            &mut input,
+        )
+        .unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        assert_ne!(output, source, "general line wrapping should still run");
+        assert!(
+            output.contains("漢A"),
+            "JSON selection must suppress Markdown spacing"
+        );
+        assert!(!output.contains("漢 A"));
+    }
+
+    #[test]
+    fn format_command_language_markdown_enables_spacing_for_stdin() {
+        let mut input = "漢A\n".as_bytes();
+        let mut output = Vec::new();
+        format_command_with_reader(
+            &mut output,
+            &config(),
+            &[] as &[PathBuf],
+            false,
+            Some(Language::Markdown),
+            &mut input,
+        )
+        .unwrap();
+        assert_eq!(String::from_utf8(output).unwrap(), "漢 A\n");
     }
 }

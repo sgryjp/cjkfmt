@@ -4,21 +4,28 @@ use std::{
     path::Path,
 };
 
-use cjkfmt_parser::{Grammar, grammar_from_path, parse};
+use cjkfmt_parser::{Grammar, parse};
 use tree_sitter::{Node, Tree};
 
-pub fn debug_cst_command<W, P>(stdout: &mut W, filenames: &[P]) -> anyhow::Result<()>
+use super::args::Language;
+
+pub fn debug_cst_command<W, P>(
+    stdout: &mut W,
+    filenames: &[P],
+    language: Option<Language>,
+) -> anyhow::Result<()>
 where
     W: std::io::Write,
     P: AsRef<Path>,
 {
     let mut stdin = stdin();
-    debug_cst_command_with_reader(stdout, filenames, &mut stdin)
+    debug_cst_command_with_reader(stdout, filenames, language, &mut stdin)
 }
 
 fn debug_cst_command_with_reader<W, P, R>(
     stdout: &mut W,
     filenames: &[P],
+    language: Option<Language>,
     stdin: &mut R,
 ) -> anyhow::Result<()>
 where
@@ -29,11 +36,12 @@ where
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        write_tree(stdout, Grammar::Markdown, &content)?;
+        let grammar = Language::grammar_or_markdown_default(language);
+        write_tree(stdout, grammar, &content)?;
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let grammar = grammar_from_path(filename);
+            let grammar = Language::grammar_or_inferred_path(language, filename);
             let content = fs::read_to_string(filename)?;
             write_tree(stdout, grammar, &content)?;
         }
@@ -117,7 +125,7 @@ mod tests {
         let mut stdout = Vec::new();
         let mut stdin = "# Test\n".as_bytes();
 
-        debug_cst_command_with_reader(&mut stdout, &[] as &[PathBuf], &mut stdin).unwrap();
+        debug_cst_command_with_reader(&mut stdout, &[] as &[PathBuf], None, &mut stdin).unwrap();
 
         let actual = String::from_utf8(stdout).unwrap();
         assert_eq!(
@@ -139,7 +147,7 @@ mod tests {
 
         let mut stdout = Vec::new();
         let mut stdin = "".as_bytes();
-        debug_cst_command_with_reader(&mut stdout, &[&path], &mut stdin).unwrap();
+        debug_cst_command_with_reader(&mut stdout, &[&path], None, &mut stdin).unwrap();
 
         let actual = String::from_utf8(stdout).unwrap();
         assert!(actual.contains("(section [0, 0] - [1, 0]"));
@@ -149,13 +157,50 @@ mod tests {
     }
 
     #[test]
+    fn debug_cst_command_language_override_uses_json_for_stdin() {
+        let mut stdout = Vec::new();
+        let mut stdin = "{\"name\":1}\n".as_bytes();
+        debug_cst_command_with_reader(
+            &mut stdout,
+            &[] as &[PathBuf],
+            Some(Language::Json),
+            &mut stdin,
+        )
+        .unwrap();
+
+        let actual = String::from_utf8(stdout).unwrap();
+        assert!(actual.contains("(object [0, 0] - [0, 10]"));
+    }
+
+    #[test]
+    fn debug_cst_command_language_override_applies_to_every_named_file() {
+        let first = make_temp_path("json");
+        let second = make_temp_path("txt");
+        fs::write(&first, "# First\n").unwrap();
+        fs::write(&second, "# Second\n").unwrap();
+        let mut stdout = Vec::new();
+        let mut stdin = "".as_bytes();
+        debug_cst_command_with_reader(
+            &mut stdout,
+            &[&first, &second],
+            Some(Language::Markdown),
+            &mut stdin,
+        )
+        .unwrap();
+        let actual = String::from_utf8(stdout).unwrap();
+        assert_eq!(actual.matches("(section [0, 0]").count(), 2);
+        fs::remove_file(first).unwrap();
+        fs::remove_file(second).unwrap();
+    }
+
+    #[test]
     fn debug_cst_command_uses_json_grammar_for_lowercase_json_files() {
         let path = make_temp_path("json");
         fs::write(&path, "{\"name\":1}\n").unwrap();
 
         let mut stdout = Vec::new();
         let mut stdin = "".as_bytes();
-        debug_cst_command_with_reader(&mut stdout, &[&path], &mut stdin).unwrap();
+        debug_cst_command_with_reader(&mut stdout, &[&path], None, &mut stdin).unwrap();
 
         let actual = String::from_utf8(stdout).unwrap();
         assert_eq!(
