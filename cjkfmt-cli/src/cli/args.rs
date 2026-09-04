@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use figment::{
@@ -14,6 +17,38 @@ pub enum ColorOutputMode {
     Always,
     Never,
     Auto,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    Markdown,
+    Json,
+}
+
+impl Language {
+    pub fn grammar(self) -> cjkfmt_parser::Grammar {
+        match self {
+            Self::Markdown => cjkfmt_parser::Grammar::Markdown,
+            Self::Json => cjkfmt_parser::Grammar::Json,
+        }
+    }
+
+    /// Resolve an explicit override while leaving historical path inference untouched.
+    ///
+    /// The override belongs to #82; preserving inference when it is absent leaves
+    /// normalization of filename selection to #96.
+    pub fn grammar_or_inferred_path(language: Option<Self>, path: &Path) -> cjkfmt_parser::Grammar {
+        language
+            .map(Self::grammar)
+            .unwrap_or_else(|| cjkfmt_parser::grammar_from_path(path))
+    }
+
+    pub fn grammar_or_markdown_default(language: Option<Self>) -> cjkfmt_parser::Grammar {
+        language
+            .map(Self::grammar)
+            .unwrap_or(cjkfmt_parser::Grammar::Markdown)
+    }
 }
 
 #[derive(Parser, Debug, Deserialize, Serialize)]
@@ -93,6 +128,10 @@ pub enum Commands {
         #[arg(short, long, requires = "filenames")]
         write: bool,
 
+        /// Explicitly select the input language, overriding filename-based detection.
+        #[arg(long, value_enum)]
+        language: Option<Language>,
+
         /// File(s) to process.
         #[arg()]
         filenames: Vec<PathBuf>,
@@ -100,6 +139,10 @@ pub enum Commands {
 
     /// Check whether formatting is correct without modifying the files.
     Check {
+        /// Explicitly select the input language, overriding filename-based detection.
+        #[arg(long, value_enum)]
+        language: Option<Language>,
+
         /// File(s) to process.
         #[arg()]
         filenames: Vec<PathBuf>,
@@ -107,6 +150,10 @@ pub enum Commands {
 
     /// Print the parsed concrete syntax tree for debugging.
     DebugCst {
+        /// Explicitly select the input language, overriding filename-based detection.
+        #[arg(long, value_enum)]
+        language: Option<Language>,
+
         /// File(s) to process.
         #[arg()]
         filenames: Vec<PathBuf>,
@@ -140,8 +187,13 @@ mod tests {
             .expect("the write command-line arguments should parse");
 
         match args.command {
-            Commands::Format { write, filenames } => {
+            Commands::Format {
+                write,
+                language,
+                filenames,
+            } => {
                 assert!(write);
+                assert_eq!(language, None);
                 assert_eq!(filenames, [PathBuf::from("file.md")]);
             }
             _ => panic!("expected format command"),
@@ -153,6 +205,40 @@ mod tests {
         let result = CliArgs::try_parse_from(["cjkfmt", "format", "--write"]);
 
         assert!(result.is_err());
+    }
+
+    fn selected_language(args: CliArgs) -> Option<Language> {
+        match args.command {
+            Commands::Format { language, .. }
+            | Commands::Check { language, .. }
+            | Commands::DebugCst { language, .. } => language,
+        }
+    }
+
+    #[rstest]
+    #[case("format")]
+    #[case("check")]
+    #[case("debug-cst")]
+    fn language_flag_accepts_supported_values_and_defaults_to_none(#[case] command: &str) {
+        for (value, expected) in [("markdown", Language::Markdown), ("json", Language::Json)] {
+            let args = CliArgs::try_parse_from(["cjkfmt", command, "--language", value])
+                .expect("supported language should parse");
+            assert_eq!(selected_language(args), Some(expected));
+        }
+
+        let args =
+            CliArgs::try_parse_from(["cjkfmt", command]).expect("language should be optional");
+        assert_eq!(selected_language(args), None);
+    }
+
+    #[rstest]
+    #[case("format")]
+    #[case("check")]
+    #[case("debug-cst")]
+    fn language_flag_rejects_unknown_values(#[case] command: &str) {
+        assert!(
+            CliArgs::try_parse_from(["cjkfmt", command, "--language", "unknown-lang"]).is_err()
+        );
     }
 
     #[test]
