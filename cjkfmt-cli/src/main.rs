@@ -99,8 +99,7 @@ mod file_based_tests {
         // Use Markdown grammar because `input` is raw text content from the test
         // case file; JSON grammar has no inline nodes and would not exercise the
         // spacing checker.
-        let mut document = Document::new(&test_case.input, Grammar::Markdown, Some(&resource));
-        document.parse().expect("failed to parse the document");
+        let document = Document::new(&test_case.input, Grammar::Markdown, Some(&resource));
         let actual = check_one_file(&test_case.config, &document)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
 

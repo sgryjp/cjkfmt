@@ -1,7 +1,6 @@
 //! The [`Document`] type for storing document content and metadata.
 
-use cjkfmt_parser::{Grammar, errors::CjkfmtParseError, parse};
-use tree_sitter::Tree;
+use cjkfmt_parser::Grammar;
 
 /// Represents a document to be processed.
 ///
@@ -18,10 +17,6 @@ pub struct Document {
     /// The name of the file from which the content was read, if available.
     /// This will be None if the content was read from stdin.
     pub filename: Option<String>,
-
-    /// The syntax tree of the document.
-    /// This is set after called [`parse`].
-    tree: Option<Tree>,
 }
 
 impl Document {
@@ -42,16 +37,6 @@ impl Document {
             content: content.into(),
             grammar,
             filename: filename.map(Into::into),
-            tree: None,
         }
-    }
-
-    /// Parses the document.
-    pub fn parse(&mut self) -> Result<(), CjkfmtParseError> {
-        parse(self.grammar, &self.content).map(|tree| self.tree = Some(tree))
-    }
-
-    pub fn tree(&self) -> Option<&Tree> {
-        self.tree.as_ref()
     }
 }

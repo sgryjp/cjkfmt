@@ -14,11 +14,6 @@ pub(crate) fn check_one_file(
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
     let mut diagnostics = Vec::new();
 
-    // Make sure the document was already parsed.
-    let Some(_tree) = document.tree() else {
-        anyhow::bail!("the document passed to check_one_file does not have CST.");
-    };
-
     // Initialize required components
     let breaker = LineBreaker::builder()
         .ambiguous_width(config.ambiguous_width)
@@ -80,10 +75,15 @@ mod tests {
     use crate::config::SpacingRule;
 
     #[test]
-    fn check_one_file_should_fail_if_called_before_parse() {
-        let config = Config::default();
-        let document = Document::new::<&str, &str>("# Subject", Grammar::Markdown, None);
-        assert!(check_one_file(&config, &document).is_err());
+    fn check_one_file_checks_unparsed_markdown_documents() {
+        let mut config = Config::default();
+        config.spacing.alphabets = SpacingRule::Require;
+        let document = Document::new("漢A", Grammar::Markdown, None::<String>);
+
+        let diagnostics = check_one_file(&config, &document).expect("failed to check document");
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, "W002");
     }
 
     #[test]
@@ -91,8 +91,7 @@ mod tests {
         let mut config = Config::default();
         config.spacing.digits = SpacingRule::Require;
 
-        let mut document = Document::new("# 漢1\n", Grammar::Markdown, Some("t.md"));
-        document.parse().expect("failed to parse the document");
+        let document = Document::new("# 漢1\n", Grammar::Markdown, Some("t.md"));
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics.len(), 1);
@@ -106,8 +105,7 @@ mod tests {
         let mut config = Config::default();
         config.spacing.digits = SpacingRule::Require;
 
-        let mut document = Document::new("# 見出し\n\n# 漢1\n", Grammar::Markdown, Some("t.md"));
-        document.parse().expect("failed to parse the document");
+        let document = Document::new("# 見出し\n\n# 漢1\n", Grammar::Markdown, Some("t.md"));
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics.len(), 1);
@@ -121,8 +119,7 @@ mod tests {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Prohibit;
 
-        let mut document = Document::new("# 漢 A\n", Grammar::Markdown, Some("t.md"));
-        document.parse().expect("failed to parse the document");
+        let document = Document::new("# 漢 A\n", Grammar::Markdown, Some("t.md"));
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics.len(), 1);
@@ -142,8 +139,7 @@ mod tests {
             ("[漢A](destination)", 2),
             ("![漢A](image.png)", 3),
         ] {
-            let mut document = Document::new(source, Grammar::Markdown, Some("t.md"));
-            document.parse().expect("failed to parse the document");
+            let document = Document::new(source, Grammar::Markdown, Some("t.md"));
             let diagnostics = check_one_file(&config, &document).expect("failed to check document");
             assert_eq!(
                 diagnostics.len(),
@@ -159,8 +155,7 @@ mod tests {
     fn check_one_file_reports_deletion_span_for_the_entire_ascii_space_run() {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Prohibit;
-        let mut document = Document::new("漢  A", Grammar::Markdown, Some("t.md"));
-        document.parse().expect("failed to parse the document");
+        let document = Document::new("漢  A", Grammar::Markdown, Some("t.md"));
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics[0].start, Position::new(0, 1));
@@ -189,8 +184,7 @@ mod tests {
             // Keep an eligible pair outside the excluded construct so this test
             // proves the checker is selecting prose, rather than finding no pair.
             let source_with_prose = format!("{source}\n\n漢A");
-            let mut document = Document::new(&source_with_prose, Grammar::Markdown, Some("t.md"));
-            document.parse().expect("failed to parse document");
+            let document = Document::new(&source_with_prose, Grammar::Markdown, Some("t.md"));
             let diagnostics = check_one_file(&config, &document)
                 .expect("failed to check document")
                 .into_iter()
@@ -211,8 +205,7 @@ mod tests {
     fn check_one_file_does_not_report_spacing_for_json_documents() {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Require;
-        let mut document = Document::new("{\"value\":\"漢A\"}", Grammar::Json, Some("t.json"));
-        document.parse().expect("failed to parse the document");
+        let document = Document::new("{\"value\":\"漢A\"}", Grammar::Json, Some("t.json"));
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert!(
