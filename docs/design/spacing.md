@@ -158,10 +158,7 @@ content and apply the same spacing rules.
 - `format` must make every spacing change reported by `check` when run with the same configuration.
 - Neither command may act on content excluded by the Markdown prose rules above.
 
-This is the intended contract. The current checker does not yet share all of the formatter's
-Markdown prose selection rules; the conformance gap is tracked in [issue #91].
-
-[issue #91]: https://github.com/sgryjp/cjkfmt/issues/91
+This is the conformance contract for Markdown spacing checks and formatting.
 
 ## Non-goals
 
