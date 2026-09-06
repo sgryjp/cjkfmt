@@ -1,3 +1,5 @@
+use cjkfmt_parser::FileGrammar;
+
 use crate::{
     config::Config,
     line_break::{BreakPoint, LineBreaker},
@@ -8,12 +10,12 @@ use cjkfmt_core::lines_inclusive::LinesInclusiveExt;
 pub(crate) fn format_one_file<W: std::io::Write>(
     stdout: &mut W,
     config: &Config,
-    apply_spacing: bool,
+    file_grammar: Option<FileGrammar>,
     content: &str,
 ) -> Result<(), anyhow::Error> {
     // Keep Markdown spacing selection separate from line wrapping. Both
     // Markdown and non-Markdown inputs retain the existing wrapping pass.
-    let content = if apply_spacing {
+    let content = if file_grammar == Some(FileGrammar::Markdown) {
         let edits = plan_edits(config, content)?;
         let mut content = content.to_owned();
         for edit in edits.into_iter().rev() {
@@ -65,20 +67,21 @@ mod tests {
         config
     }
 
-    fn format(apply_markdown_spacing: bool, source: &str) -> String {
+    fn format(file_grammar: Option<FileGrammar>, source: &str) -> String {
         let mut output = Vec::new();
-        format_one_file(&mut output, &config(), apply_markdown_spacing, source).unwrap();
+        format_one_file(&mut output, &config(), file_grammar, source).unwrap();
         String::from_utf8(output).unwrap()
     }
 
     #[test]
     fn format_applies_configured_spacing_to_markdown_prose() {
-        assert_eq!(format(true, "漢A\n"), "漢 A\n");
+        assert_eq!(format(Some(FileGrammar::Markdown), "漢A\n"), "漢 A\n");
     }
 
     #[test]
     fn format_preserves_spacing_in_non_markdown_input() {
         let source = "{\"value\":\"漢A\"}\n";
-        assert_eq!(format(false, source), source);
+        assert_eq!(format(Some(FileGrammar::Json), source), source);
+        assert_eq!(format(None, source), source);
     }
 }

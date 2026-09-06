@@ -41,7 +41,14 @@ where
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let grammar = Language::grammar_or_inferred_path(language, filename);
+            let file_grammar =
+                Language::grammar_or_inferred_path(language, filename).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "could not infer the language for {}; specify it with --language",
+                        filename.display()
+                    )
+                })?;
+            let grammar: Grammar = file_grammar.into();
             let content = fs::read_to_string(filename)?;
             write_tree(stdout, grammar, &content)?;
         }
@@ -117,7 +124,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("cjkfmt-debug-cst-{unique}.{extension}"))
+        let filename = if extension.is_empty() {
+            format!("cjkfmt-debug-cst-{unique}")
+        } else {
+            format!("cjkfmt-debug-cst-{unique}.{extension}")
+        };
+        std::env::temp_dir().join(filename)
     }
 
     #[test]
@@ -141,19 +153,36 @@ mod tests {
     }
 
     #[test]
-    fn debug_cst_command_uses_markdown_grammar_for_uppercase_json_files() {
+    fn debug_cst_command_uses_json_grammar_for_uppercase_json_files() {
         let path = make_temp_path("JSON");
-        fs::write(&path, "# Test\n").unwrap();
+        fs::write(&path, "{\"name\":1}\n").unwrap();
 
         let mut stdout = Vec::new();
         let mut stdin = "".as_bytes();
         debug_cst_command_with_reader(&mut stdout, &[&path], None, &mut stdin).unwrap();
 
         let actual = String::from_utf8(stdout).unwrap();
-        assert!(actual.contains("(section [0, 0] - [1, 0]"));
-        assert!(!actual.contains("(object "));
+        assert!(actual.contains("(object [0, 0] - [0, 10]"));
+        assert!(!actual.contains("(section "));
 
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn debug_cst_command_rejects_unrecognized_named_files_without_an_override() {
+        for extension in ["txt", ""] {
+            let path = make_temp_path(extension);
+            fs::write(&path, "# Test\n").unwrap();
+
+            let error =
+                debug_cst_command_with_reader(&mut Vec::new(), &[&path], None, &mut "".as_bytes())
+                    .expect_err("unsupported named files should require an explicit language");
+            let message = error.to_string();
+            assert!(message.contains(path.to_string_lossy().as_ref()));
+            assert!(message.contains("specify it with --language"));
+
+            fs::remove_file(path).unwrap();
+        }
     }
 
     #[test]

@@ -23,6 +23,18 @@ cjkfmt format --write README.md docs/example.md
 
 Omitting `--write` leaves the source files unchanged and sends formatted content to stdout.
 
+### Language Selection
+
+Named files are classified by their final extension: `.md` and `.markdown` select Markdown, and
+`.json` selects JSON. Matching is case-insensitive for ASCII letters. Other named paths require an
+explicit `--language markdown` or `--language json`; an explicit selection always takes precedence
+over the filename. `format` applies Markdown-prose spacing only to Markdown input, while JSON and
+unrecognized input still receive the general line-wrapping pass.
+
+When reading stdin without `--language`, `check` and `debug-cst` assume Markdown. `format` uses a
+conservative default and skips Markdown-prose spacing. Use `--language markdown` or
+`--language json` to select the stdin language explicitly.
+
 ## Configuration
 
 cjkfmt can be configured in several ways, with configuration options applied in the following order

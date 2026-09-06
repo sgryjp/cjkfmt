@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the CLI options for config override: `--ambiguous-width`, `--spacing-alphabets`,
   `--spacing-digits`, and `--spacing-punctuation-as-fullwidth`.
 
+### Changed
+
+- Canonicalized filename-based language selection across `format`, `check`, and `debug-cst`.
+  Unsupported named paths are now rejected by `check` and `debug-cst` unless
+  `--language markdown|json` is used.
+
 ### Fixed
 
 - Aligned Markdown spacing checks with formatting so excluded inline content is not diagnosed.
