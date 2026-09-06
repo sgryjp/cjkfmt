@@ -27,27 +27,28 @@ pub enum Language {
 }
 
 impl Language {
-    pub fn grammar(self) -> cjkfmt_parser::Grammar {
+    pub fn grammar(self) -> cjkfmt_parser::FileGrammar {
         match self {
-            Self::Markdown => cjkfmt_parser::Grammar::Markdown,
-            Self::Json => cjkfmt_parser::Grammar::Json,
+            Self::Markdown => cjkfmt_parser::FileGrammar::Markdown,
+            Self::Json => cjkfmt_parser::FileGrammar::Json,
         }
     }
 
-    /// Resolve an explicit override while leaving historical path inference untouched.
-    ///
-    /// The override belongs to #82; preserving inference when it is absent leaves
-    /// normalization of filename selection to #96.
-    pub fn grammar_or_inferred_path(language: Option<Self>, path: &Path) -> cjkfmt_parser::Grammar {
+    /// Resolve an explicit override or the canonical filename selection.
+    pub fn grammar_or_inferred_path(
+        language: Option<Self>,
+        path: &Path,
+    ) -> Option<cjkfmt_parser::FileGrammar> {
         language
             .map(Self::grammar)
-            .unwrap_or_else(|| cjkfmt_parser::grammar_from_path(path))
+            .or_else(|| cjkfmt_parser::grammar_from_path(path))
     }
 
     pub fn grammar_or_markdown_default(language: Option<Self>) -> cjkfmt_parser::Grammar {
-        language
-            .map(Self::grammar)
-            .unwrap_or(cjkfmt_parser::Grammar::Markdown)
+        match language {
+            Some(language) => language.grammar().into(),
+            None => cjkfmt_parser::Grammar::Markdown,
+        }
     }
 }
 
@@ -238,6 +239,49 @@ mod tests {
     fn language_flag_rejects_unknown_values(#[case] command: &str) {
         assert!(
             CliArgs::try_parse_from(["cjkfmt", command, "--language", "unknown-lang"]).is_err()
+        );
+    }
+
+    #[test]
+    fn language_resolution_prefers_an_explicit_file_grammar() {
+        assert_eq!(
+            Language::grammar_or_inferred_path(
+                Some(Language::Markdown),
+                Path::new("document.json"),
+            ),
+            Some(cjkfmt_parser::FileGrammar::Markdown)
+        );
+        assert_eq!(
+            Language::grammar_or_inferred_path(Some(Language::Json), Path::new("document.txt")),
+            Some(cjkfmt_parser::FileGrammar::Json)
+        );
+    }
+
+    #[test]
+    fn language_resolution_uses_canonical_filename_extensions() {
+        assert_eq!(
+            Language::grammar_or_inferred_path(None, Path::new("document.MarkDown")),
+            Some(cjkfmt_parser::FileGrammar::Markdown)
+        );
+        assert_eq!(
+            Language::grammar_or_inferred_path(None, Path::new("document.JSON")),
+            Some(cjkfmt_parser::FileGrammar::Json)
+        );
+        assert_eq!(
+            Language::grammar_or_inferred_path(None, Path::new("document.txt")),
+            None
+        );
+    }
+
+    #[test]
+    fn language_resolution_uses_markdown_for_stdin_only_when_requested() {
+        assert_eq!(
+            Language::grammar_or_markdown_default(None),
+            cjkfmt_parser::Grammar::Markdown
+        );
+        assert_eq!(
+            Language::grammar_or_markdown_default(Some(Language::Json)),
+            cjkfmt_parser::Grammar::Json
         );
     }
 

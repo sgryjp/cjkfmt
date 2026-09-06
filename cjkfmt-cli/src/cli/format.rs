@@ -19,14 +19,6 @@ pub fn format_command<W: std::io::Write, P: AsRef<Path>>(
     format_command_with_reader(stdout, config, filenames, write, language, &mut stdin)
 }
 
-fn is_markdown_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
-        })
-}
-
 fn format_command_with_reader<W, P, R>(
     stdout: &mut W,
     config: &Config,
@@ -46,26 +38,19 @@ where
     if filenames.is_empty() && !write {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        format_one_file(
-            stdout,
-            config,
-            language == Some(Language::Markdown),
-            &content,
-        )?;
+        format_one_file(stdout, config, language.map(Language::grammar), &content)?;
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let apply_markdown_spacing = language
-                .map(|language| language == Language::Markdown)
-                .unwrap_or_else(|| is_markdown_path(filename));
+            let file_grammar = Language::grammar_or_inferred_path(language, filename);
             let content = fs::read_to_string(filename)?;
 
             if write {
                 let mut formatted = Vec::new();
-                format_one_file(&mut formatted, config, apply_markdown_spacing, &content)?;
+                format_one_file(&mut formatted, config, file_grammar, &content)?;
                 fs::write(filename, formatted)?;
             } else {
-                format_one_file(stdout, config, apply_markdown_spacing, &content)?;
+                format_one_file(stdout, config, file_grammar, &content)?;
             }
         }
     }
@@ -127,19 +112,31 @@ mod tests {
     }
 
     #[test]
-    fn format_command_writes_formatted_content_to_each_named_file_without_stdout() {
+    fn format_command_writes_the_same_classification_used_for_stdout() {
         let directory = tempdir().unwrap();
-        let markdown = directory.path().join("document.md");
-        let text = directory.path().join("document.txt");
-        fs::write(&markdown, "漢A\n").unwrap();
-        fs::write(&text, "漢A\n").unwrap();
+        let cases = [
+            ("document.MarkDown", "漢 A\n"),
+            ("document.JSON", "漢A\n"),
+            ("document.txt", "漢A\n"),
+            ("document", "漢A\n"),
+            ("document.md.txt", "漢A\n"),
+        ];
+        let paths: Vec<_> = cases
+            .iter()
+            .map(|(filename, _)| {
+                let path = directory.path().join(filename);
+                fs::write(&path, "漢A\n").unwrap();
+                path
+            })
+            .collect();
 
         let mut output = Vec::new();
-        format_command(&mut output, &config(), &[&markdown, &text], true, None).unwrap();
+        format_command(&mut output, &config(), &paths, true, None).unwrap();
 
         assert!(output.is_empty());
-        assert_eq!(fs::read_to_string(markdown).unwrap(), "漢 A\n");
-        assert_eq!(fs::read_to_string(text).unwrap(), "漢A\n");
+        for ((_, expected), path) in cases.iter().zip(paths) {
+            assert_eq!(fs::read_to_string(path).unwrap(), *expected);
+        }
     }
 
     #[test]

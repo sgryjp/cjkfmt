@@ -1,22 +1,41 @@
 use std::path::Path;
 
 /// Supported grammar types for parsing.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Grammar {
     Json,
     Markdown,
     MarkdownInline,
 }
 
-/// Infers the grammar type from the file extension of the given path.
+/// Grammar types that can be selected from a named file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileGrammar {
+    Json,
+    Markdown,
+}
+
+impl From<FileGrammar> for Grammar {
+    fn from(grammar: FileGrammar) -> Self {
+        match grammar {
+            FileGrammar::Json => Grammar::Json,
+            FileGrammar::Markdown => Grammar::Markdown,
+        }
+    }
+}
+
+/// Infers a filename-selectable grammar from the file extension of `path`.
 ///
-/// Only an exact lowercase `.json` extension selects JSON. All other paths
-/// retain the historical Markdown fallback used by the CLI commands.
-pub fn grammar_from_path<P: AsRef<Path>>(path: P) -> Grammar {
-    let path = path.as_ref();
-    match path.extension().map(|s| s.to_str().unwrap()) {
-        Some("json") => Grammar::Json,
-        _ => Grammar::Markdown,
+/// Matching is ASCII-case-insensitive and only Markdown and JSON extensions
+/// are recognized. A filename without a UTF-8 extension is not selectable.
+pub fn grammar_from_path(path: &Path) -> Option<FileGrammar> {
+    let extension = path.extension()?.to_str()?;
+    if extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown") {
+        Some(FileGrammar::Markdown)
+    } else if extension.eq_ignore_ascii_case("json") {
+        Some(FileGrammar::Json)
+    } else {
+        None
     }
 }
 
@@ -25,24 +44,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn selects_json_only_for_an_exact_lowercase_extension() {
-        assert_eq!(grammar_from_path("config.json"), Grammar::Json);
-        assert_eq!(grammar_from_path("config.JSON"), Grammar::Markdown);
+    fn selects_the_canonical_file_grammar_for_supported_extensions() {
+        let cases = [
+            ("README.md", Some(FileGrammar::Markdown)),
+            ("guide.markdown", Some(FileGrammar::Markdown)),
+            ("README.MD", Some(FileGrammar::Markdown)),
+            ("guide.MarkDown", Some(FileGrammar::Markdown)),
+            ("config.json", Some(FileGrammar::Json)),
+            ("config.JSON", Some(FileGrammar::Json)),
+            ("config.JsOn", Some(FileGrammar::Json)),
+            ("notes.txt", None),
+            ("main.rs", None),
+            ("README", None),
+            ("README.md.txt", None),
+        ];
+
+        for (path, expected) in cases {
+            assert_eq!(grammar_from_path(Path::new(path)), expected, "{path}");
+        }
     }
 
+    #[cfg(unix)]
     #[test]
-    fn falls_back_to_markdown_for_all_other_paths() {
-        for path in [
-            "README.md",
-            "guide.markdown",
-            "README.MD",
-            "guide.MarkDown",
-            "notes.txt",
-            "main.rs",
-            "README",
-            "README.md.txt",
-        ] {
-            assert_eq!(grammar_from_path(path), Grammar::Markdown, "{path}");
-        }
+    fn rejects_a_non_utf8_extension() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+        let path = OsString::from_vec(b"document.\xff".to_vec());
+        assert_eq!(grammar_from_path(Path::new(&path)), None);
     }
 }
