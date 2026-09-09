@@ -31,8 +31,11 @@ pub(crate) fn format_one_file<W: std::io::Write>(
         .max_width(config.max_width)
         .build()?;
 
-    // Iterate over each line in the input content, including line endings
+    // Iterate over each line in the input content, including line endings.
+    // Choose inserted breaks from the line being wrapped so mixed input keeps
+    // its existing line-ending style.
     for line in content.lines_inclusive() {
+        let line_ending = if line.ends_with("\r\n") { "\r\n" } else { "\n" };
         let mut remainings = line;
 
         // Iterate over wrap points in the line
@@ -43,7 +46,7 @@ pub(crate) fn format_one_file<W: std::io::Write>(
         {
             // Write the part before the wrap point
             let (before, after) = remainings.split_at(overflow_pos - adjustment);
-            writeln!(stdout, "{before}")?;
+            write!(stdout, "{before}{line_ending}")?;
             remainings = after;
         }
 
@@ -83,5 +86,44 @@ mod tests {
         let source = "{\"value\":\"漢A\"}\n";
         assert_eq!(format(Some(FileGrammar::Json), source), source);
         assert_eq!(format(None, source), source);
+    }
+
+    #[test]
+    fn format_uses_crlf_for_inserted_wraps_in_crlf_input() {
+        let mut config = config();
+        config.max_width = 8;
+        let source = "漢A one two three\r\n";
+        let mut output = Vec::new();
+        format_one_file(&mut output, &config, Some(FileGrammar::Markdown), source).unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        assert_eq!(output, "漢 A \r\none two \r\nthree\r\n");
+    }
+
+    #[test]
+    fn format_uses_lf_for_inserted_wraps_in_lf_input() {
+        let mut config = config();
+        config.max_width = 8;
+        let source = "漢A one two three\n";
+        let mut output = Vec::new();
+        format_one_file(&mut output, &config, Some(FileGrammar::Markdown), source).unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        assert_eq!(output, "漢 A \none two \nthree\n");
+    }
+
+    #[test]
+    fn format_preserves_each_source_line_ending_when_wrapping_mixed_input() {
+        let mut config = config();
+        config.max_width = 8;
+        let source = "漢A one two three\r\n漢A one two three\n";
+        let mut output = Vec::new();
+        format_one_file(&mut output, &config, Some(FileGrammar::Markdown), source).unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        assert_eq!(
+            output,
+            "漢 A \r\none two \r\nthree\r\n漢 A \none two \nthree\n"
+        );
     }
 }
