@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use cjkfmt_parser::{Grammar, parse};
+use crate::parser::{Grammar, parse};
 use tree_sitter::{Node, Tree};
 
 use super::args::Language;

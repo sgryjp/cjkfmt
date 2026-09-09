@@ -1,11 +1,11 @@
-use cjkfmt_parser::FileGrammar;
+use crate::parser::FileGrammar;
 
+use crate::core::lines_inclusive::LinesInclusiveExt;
 use crate::{
     config::Config,
     line_break::{BreakPoint, LineBreaker},
     markdown_prose::plan_edits,
 };
-use cjkfmt_core::lines_inclusive::LinesInclusiveExt;
 
 pub(crate) fn format_one_file<W: std::io::Write>(
     stdout: &mut W,

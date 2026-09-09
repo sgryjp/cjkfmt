@@ -1,6 +1,6 @@
 //! The [`Document`] type for storing document content and metadata.
 
-use cjkfmt_parser::Grammar;
+use crate::parser::Grammar;
 
 /// Represents a document to be processed.
 ///

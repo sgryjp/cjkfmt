@@ -6,6 +6,7 @@ use tree_sitter::{Node, Tree};
 /// (`on_enter`) and exiting (`on_exit`) nodes during traversal.
 /// This trait has a default implementation of `walk` method which traverses the tree
 /// depth-first order.
+#[allow(dead_code)]
 pub trait NodeVisitor {
     /// Called when entering a node during traversal.
     fn on_enter(&mut self, node: &Node);
@@ -53,7 +54,7 @@ pub trait NodeVisitor {
 mod tests {
     use tree_sitter::Node;
 
-    use crate::{Grammar, node_visitor::NodeVisitor, parse};
+    use crate::parser::{Grammar, node_visitor::NodeVisitor, parse};
 
     #[test]
     fn test_visitor() {

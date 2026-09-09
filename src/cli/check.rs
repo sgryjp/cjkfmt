@@ -54,7 +54,7 @@ where
                         filename.display()
                     )
                 })?;
-            let grammar: cjkfmt_parser::Grammar = file_grammar.into();
+            let grammar: crate::parser::Grammar = file_grammar.into();
             let content = fs::read_to_string(filename)?;
             let document = Document::new(
                 content,

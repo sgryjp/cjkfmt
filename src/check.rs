@@ -1,4 +1,4 @@
-use cjkfmt_core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, position::Position};
+use crate::core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, position::Position};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
@@ -69,7 +69,7 @@ fn check_line_length(
 
 #[cfg(test)]
 mod tests {
-    use cjkfmt_parser::Grammar;
+    use crate::parser::Grammar;
 
     use super::*;
     use crate::config::SpacingRule;

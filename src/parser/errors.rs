@@ -1,6 +1,5 @@
 use thiserror::Error;
 
-/// Error type for cjkfmt-parser crate.
 #[derive(Error, Debug)]
 pub enum CjkfmtParseError {
     /// The language was generated with an incompatible version of the Tree-sitter CLI.
