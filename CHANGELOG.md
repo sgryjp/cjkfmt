@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve each source line's line-ending style when inserting wrapping breaks, including mixed LF
+  and CRLF input.
 - Aligned Markdown spacing checks with formatting so excluded inline content is not diagnosed.
 - Fixed spacing diagnostic columns for inline Markdown content that begins after the start of a
   line.

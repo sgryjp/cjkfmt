@@ -139,6 +139,34 @@ mod tests {
         }
     }
 
+    fn assert_all_line_endings_are_crlf(output: &[u8]) {
+        assert!(
+            output.windows(2).any(|window| window == b"\r\n"),
+            "output contains no CRLF line endings: {output:?}"
+        );
+        assert!(
+            !output
+                .iter()
+                .enumerate()
+                .any(|(index, byte)| *byte == b'\n' && (index == 0 || output[index - 1] != b'\r')),
+            "output contains a bare LF: {output:?}"
+        );
+    }
+
+    #[test]
+    fn format_command_write_preserves_crlf_when_wrapping() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("document.md");
+        fs::write(&path, "漢A one two three\r\n").unwrap();
+
+        let mut config = config();
+        config.max_width = 8;
+        format_command(&mut Vec::new(), &config, &[&path], true, None).unwrap();
+
+        let output = fs::read(&path).unwrap();
+        assert_all_line_endings_are_crlf(&output);
+    }
+
     #[test]
     fn format_command_does_not_assume_stdin_is_markdown() {
         let mut input = "漢A\n".as_bytes();
