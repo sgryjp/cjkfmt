@@ -1,4 +1,4 @@
-use cjkfmt_core::diagnostic::Diagnostic;
+use crate::core::diagnostic::Diagnostic;
 use yansi::Paint;
 
 /// Returns a printable string representation of the diagnostic.

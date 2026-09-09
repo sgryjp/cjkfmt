@@ -1,8 +1,8 @@
 use tree_sitter::{Parser, Tree};
 
-use crate::Grammar;
-use crate::errors::CjkfmtParseError;
-use crate::ffi::{tree_sitter_json, tree_sitter_markdown, tree_sitter_markdown_inline};
+use super::Grammar;
+use super::errors::CjkfmtParseError;
+use super::ffi::{tree_sitter_json, tree_sitter_markdown, tree_sitter_markdown_inline};
 
 /// Parses the given content string using the specified grammar and returns a syntax tree.
 pub fn parse(grammar: Grammar, content: &str) -> Result<Tree, CjkfmtParseError> {

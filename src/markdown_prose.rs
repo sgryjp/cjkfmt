@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use cjkfmt_parser::{Grammar, parse};
+use crate::parser::{Grammar, parse};
 use tree_sitter::Node;
 
 use crate::{

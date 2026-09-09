@@ -88,13 +88,13 @@ Make sure you have [Node.js](https://nodejs.org/) installed so `npx` is availabl
 - Run Clippy:
 
   ```shell
-  cargo clippy --all-targets --all-features --workspace
+  cargo clippy --all-targets --all-features
   ```
 
 - Run all tests:
 
   ```shell
-  cargo test --all-features --workspace
+  cargo test --all-features
   ```
 
 - Check to see if there are code formatting issues

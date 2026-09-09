@@ -2,10 +2,12 @@ mod _log;
 mod check;
 mod cli;
 mod config;
+mod core;
 mod document;
 mod format;
 mod line_break;
 mod markdown_prose;
+mod parser;
 mod spacing;
 mod spacing_checker;
 
@@ -60,9 +62,9 @@ fn main() -> anyhow::Result<()> {
 mod file_based_tests {
     use super::*;
 
-    use cjkfmt_core::diagnostic::Diagnostic;
-    use cjkfmt_core::position::Position;
-    use cjkfmt_parser::{FileGrammar, Grammar};
+    use crate::core::diagnostic::Diagnostic;
+    use crate::core::position::Position;
+    use crate::parser::{FileGrammar, Grammar};
     use regex::Regex;
     use serde::Deserialize;
     use serde_json::{self};
@@ -88,16 +90,14 @@ mod file_based_tests {
         output: String,
     }
 
-    #[test_resources("cjkfmt-cli/test_cases/check/*.json")]
+    #[test_resources("test_cases/check/*.json")]
     fn check(resource: &str) {
         // Normalize path separators so tests work on both Unix-like and Windows systems
         let resource = resource.replace('\\', "/");
 
         // Load the test case from the JSON file
-        let content = std::fs::read_to_string(
-            resource.strip_prefix("cjkfmt-cli/").unwrap(), // Removing as test runs in subcrate's dir
-        )
-        .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
+        let content = std::fs::read_to_string(&resource)
+            .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
         // Use Markdown grammar because `input` is raw text content from the test
@@ -150,16 +150,14 @@ mod file_based_tests {
             .for_each(|(a, e)| assert_diagnostics_are_equal(a, e));
     }
 
-    #[test_resources("cjkfmt-cli/test_cases/format/*.json")]
+    #[test_resources("test_cases/format/*.json")]
     fn format(resource: &str) {
         // Normalize path separators so tests work on both Unix-like and Windows systems
         let resource = resource.replace('\\', "/");
 
         // Load the test case from the JSON file
-        let content = std::fs::read_to_string(
-            resource.strip_prefix("cjkfmt-cli/").unwrap(), // Removing as test runs in subcrate's dir
-        )
-        .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
+        let content = std::fs::read_to_string(&resource)
+            .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: FormatTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
 

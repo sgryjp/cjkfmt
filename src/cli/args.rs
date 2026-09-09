@@ -27,10 +27,10 @@ pub enum Language {
 }
 
 impl Language {
-    pub fn grammar(self) -> cjkfmt_parser::FileGrammar {
+    pub fn grammar(self) -> crate::parser::FileGrammar {
         match self {
-            Self::Markdown => cjkfmt_parser::FileGrammar::Markdown,
-            Self::Json => cjkfmt_parser::FileGrammar::Json,
+            Self::Markdown => crate::parser::FileGrammar::Markdown,
+            Self::Json => crate::parser::FileGrammar::Json,
         }
     }
 
@@ -38,16 +38,16 @@ impl Language {
     pub fn grammar_or_inferred_path(
         language: Option<Self>,
         path: &Path,
-    ) -> Option<cjkfmt_parser::FileGrammar> {
+    ) -> Option<crate::parser::FileGrammar> {
         language
             .map(Self::grammar)
-            .or_else(|| cjkfmt_parser::grammar_from_path(path))
+            .or_else(|| crate::parser::grammar_from_path(path))
     }
 
-    pub fn grammar_or_markdown_default(language: Option<Self>) -> cjkfmt_parser::Grammar {
+    pub fn grammar_or_markdown_default(language: Option<Self>) -> crate::parser::Grammar {
         match language {
             Some(language) => language.grammar().into(),
-            None => cjkfmt_parser::Grammar::Markdown,
+            None => crate::parser::Grammar::Markdown,
         }
     }
 }
@@ -249,11 +249,11 @@ mod tests {
                 Some(Language::Markdown),
                 Path::new("document.json"),
             ),
-            Some(cjkfmt_parser::FileGrammar::Markdown)
+            Some(crate::parser::FileGrammar::Markdown)
         );
         assert_eq!(
             Language::grammar_or_inferred_path(Some(Language::Json), Path::new("document.txt")),
-            Some(cjkfmt_parser::FileGrammar::Json)
+            Some(crate::parser::FileGrammar::Json)
         );
     }
 
@@ -261,11 +261,11 @@ mod tests {
     fn language_resolution_uses_canonical_filename_extensions() {
         assert_eq!(
             Language::grammar_or_inferred_path(None, Path::new("document.MarkDown")),
-            Some(cjkfmt_parser::FileGrammar::Markdown)
+            Some(crate::parser::FileGrammar::Markdown)
         );
         assert_eq!(
             Language::grammar_or_inferred_path(None, Path::new("document.JSON")),
-            Some(cjkfmt_parser::FileGrammar::Json)
+            Some(crate::parser::FileGrammar::Json)
         );
         assert_eq!(
             Language::grammar_or_inferred_path(None, Path::new("document.txt")),
@@ -277,11 +277,11 @@ mod tests {
     fn language_resolution_uses_markdown_for_stdin_only_when_requested() {
         assert_eq!(
             Language::grammar_or_markdown_default(None),
-            cjkfmt_parser::Grammar::Markdown
+            crate::parser::Grammar::Markdown
         );
         assert_eq!(
             Language::grammar_or_markdown_default(Some(Language::Json)),
-            cjkfmt_parser::Grammar::Json
+            crate::parser::Grammar::Json
         );
     }
 

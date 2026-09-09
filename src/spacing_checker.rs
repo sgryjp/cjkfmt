@@ -1,4 +1,4 @@
-use cjkfmt_core::{diagnostic::Diagnostic, position::Position};
+use crate::core::{diagnostic::Diagnostic, position::Position};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{config::Config, document::Document, markdown_prose::plan_edits, spacing::TextEdit};
@@ -19,7 +19,7 @@ impl<'a> SpacingChecker<'a> {
 
     /// Plans spacing edits and converts them to diagnostics.
     pub fn check(&self) -> anyhow::Result<Vec<Diagnostic>> {
-        if self.document.grammar != cjkfmt_parser::Grammar::Markdown {
+        if self.document.grammar != crate::parser::Grammar::Markdown {
             return Ok(Vec::new());
         }
 
