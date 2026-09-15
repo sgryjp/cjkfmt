@@ -7,7 +7,8 @@ use std::{
 use crate::language::Language;
 
 use crate::{
-    check::check_one_file, cli::utils::format_diagnostic, config::Config, document::Document,
+    check::check_one_file_with_language, cli::utils::format_diagnostic, config::Config,
+    document::Document,
 };
 
 pub fn check_command<W, P>(
@@ -41,11 +42,10 @@ where
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        let grammar = language
-            .map(crate::parser::grammar_for)
-            .unwrap_or(crate::parser::Grammar::Markdown);
+        let language = language.unwrap_or(Language::Markdown);
+        let grammar = crate::parser::grammar_for(language);
         let document = Document::new(content, grammar, None::<String>);
-        diagnostics.extend(check_one_file(config, &document)?);
+        diagnostics.extend(check_one_file_with_language(config, &document, language)?);
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
@@ -63,7 +63,7 @@ where
                 grammar,
                 Some(filename.to_string_lossy().to_string()),
             );
-            diagnostics.extend(check_one_file(config, &document)?);
+            diagnostics.extend(check_one_file_with_language(config, &document, language)?);
         }
     }
     for diagnostic in diagnostics {

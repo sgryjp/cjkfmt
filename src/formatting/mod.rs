@@ -15,7 +15,9 @@ use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::config::SpacingConfig;
+use crate::{config::SpacingConfig, language::Language};
+
+use self::{json::JsonFormatPolicy, markdown::MarkdownFormatPolicy};
 
 /// The spacing configuration visible to a language formatting policy.
 ///
@@ -99,6 +101,28 @@ pub(crate) trait LanguageFormatPolicy {
         &self,
         source: &str,
     ) -> Result<Vec<BreakOpportunity>, LanguageFormatError>;
+}
+
+/// Returns the built-in policy selected for a known document language.
+pub(crate) fn policy_for(language: Language) -> &'static dyn LanguageFormatPolicy {
+    match language {
+        Language::Markdown => &MarkdownFormatPolicy,
+        Language::Json => &JsonFormatPolicy,
+    }
+}
+
+/// Plans and validates spacing edits through the selected language policy.
+///
+/// Formatting and W002 both use this boundary so parser failures and malformed
+/// source receive the policy's same fail-closed treatment in either workflow.
+pub(crate) fn plan_spacing_edits(
+    language: Language,
+    source: &str,
+    rules: &SpacingRules,
+) -> Result<Vec<TextEdit>, LanguageFormatError> {
+    let mut edits = policy_for(language).plan_spacing_edits(source, rules)?;
+    validate_text_edits(source, &mut edits)?;
+    Ok(edits)
 }
 
 /// Validate and canonicalize source-relative spacing edits.

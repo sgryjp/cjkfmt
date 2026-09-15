@@ -1,34 +1,40 @@
 use crate::core::{diagnostic::Diagnostic, position::Position};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{config::Config, document::Document, markdown_prose::plan_edits, spacing::TextEdit};
+use crate::{
+    config::Config,
+    document::Document,
+    formatting::{TextEdit, plan_spacing_edits},
+    language::Language,
+};
 
-/// Checks for possible spacing issues using the same validated Markdown prose
-/// edit plan as the formatter.
+/// Checks for possible spacing issues from the selected policy's validated
+/// edit plan, which is the same plan used by the formatter.
 #[derive(Debug)]
 pub struct SpacingChecker<'a> {
     config: &'a Config,
     document: &'a Document,
+    language: Language,
 }
 
 impl<'a> SpacingChecker<'a> {
-    /// Creates a new SpacingChecker for the given config and document.
-    pub fn new(config: &'a Config, document: &'a Document) -> Self {
-        Self { config, document }
+    /// Creates a spacing checker for the selected language and document.
+    pub fn new(config: &'a Config, document: &'a Document, language: Language) -> Self {
+        Self {
+            config,
+            document,
+            language,
+        }
     }
 
     /// Plans spacing edits and converts them to diagnostics.
     pub fn check(&self) -> anyhow::Result<Vec<Diagnostic>> {
-        if self.document.grammar != crate::parser::Grammar::Markdown {
-            return Ok(Vec::new());
-        }
-
-        plan_edits(self.config, &self.document.content).map(|edits| {
-            edits
-                .iter()
-                .map(|edit| self.diagnostic_for_edit(edit))
-                .collect()
-        })
+        let edits =
+            plan_spacing_edits(self.language, &self.document.content, &self.config.spacing)?;
+        Ok(edits
+            .iter()
+            .map(|edit| self.diagnostic_for_edit(edit))
+            .collect())
     }
 }
 

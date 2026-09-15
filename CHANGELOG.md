@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy pipeline. (#104)
 - Added syntax-preserving JSON wrapping at legal token seams through the formatter
   policy pipeline. (#104)
+- Routed W002 spacing diagnostics through the selected language formatting
+  policy while retaining syntax-independent W001 physical-width diagnostics. (#104)
 
 ## v0.0.7 - 2026-09-11
 

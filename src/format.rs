@@ -2,8 +2,8 @@ use crate::core::lines_inclusive::LinesInclusiveExt;
 use crate::{
     config::Config,
     formatting::{
-        BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, apply_text_edits,
-        json::JsonFormatPolicy, markdown::MarkdownFormatPolicy, validate_break_opportunities,
+        BreakOpportunity, LanguageFormatError, apply_text_edits, plan_spacing_edits, policy_for,
+        validate_break_opportunities,
     },
     language::Language,
     line_break::{LineBreakPlanner, LineRelativeBreakOpportunity},
@@ -59,22 +59,10 @@ impl Formatter {
         language: Language,
         source: &str,
     ) -> Result<String, FormatError> {
-        match language {
-            Language::Markdown => self.format_with_policy(&MarkdownFormatPolicy, source),
-            Language::Json => self.format_with_policy(&JsonFormatPolicy, source),
-        }
-    }
-
-    fn format_with_policy(
-        &self,
-        policy: &dyn LanguageFormatPolicy,
-        source: &str,
-    ) -> Result<String, FormatError> {
-        let edits = policy
-            .plan_spacing_edits(source, &self.config.spacing)
+        let edits = plan_spacing_edits(language, source, &self.config.spacing)
             .map_err(FormatError::Language)?;
         let content = apply_text_edits(source, &edits).map_err(FormatError::Language)?;
-        let mut opportunities = policy
+        let mut opportunities = policy_for(language)
             .plan_break_opportunities(&content)
             .map_err(FormatError::Language)?;
         validate_break_opportunities(&content, &mut opportunities)

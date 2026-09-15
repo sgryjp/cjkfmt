@@ -6,7 +6,7 @@ use tree_sitter::Node;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    config::{Config, SpacingConfig},
+    config::SpacingConfig,
     formatting::{
         BreakOpportunity, LanguageFormatError, TextEdit, validate_break_opportunities,
         validate_text_edits,
@@ -137,9 +137,12 @@ const INLINE_NODE_KINDS: &[&str] = &[
     "uri_autolink",
 ];
 
-/// Plans validated spacing edits for Markdown prose while preserving inline
-/// constructs whose contents are not displayed as ordinary prose.
-pub(crate) fn plan_edits(config: &Config, source: &str) -> anyhow::Result<Vec<TextEdit>> {
+/// Plans validated spacing edits for legacy unit-test helpers.
+#[cfg(test)]
+pub(crate) fn plan_edits(
+    config: &crate::config::Config,
+    source: &str,
+) -> anyhow::Result<Vec<TextEdit>> {
     plan_spacing_edits(source, &config.spacing).map_err(|error| anyhow::anyhow!(error))
 }
 
@@ -891,7 +894,7 @@ fn edit_intersects(edit: &Range<usize>, exclusion: &Range<usize>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::SpacingRule;
+    use crate::config::{Config, SpacingRule};
 
     fn config(alphabets: SpacingRule, digits: SpacingRule) -> Config {
         let mut config = Config {
