@@ -4,6 +4,12 @@ cjkfmt checks and formats text with CJK-aware line width and spacing rules.
 
 ## Language
 
+**CJK-aware formatting**:
+Source formatting based on CJK-aware spacing rules and physical source-line width. The selected
+Language constrains where changes may occur, but language-specific code layout and style are not
+reformatted.
+_Avoid_: Language formatting, code formatting
+
 **Language**:
 The user-facing kind of input document selected with `--language`. The supported canonical
 values are lowercase `markdown` and `json`; an explicit selection takes precedence over
