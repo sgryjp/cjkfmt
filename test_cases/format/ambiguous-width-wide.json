@@ -4,5 +4,5 @@
     "max_width": 17
   },
   "input": "※East Asian WidthプロパティがAmbiguous",
-  "output": "※East Asian \nWidthプロパティが\nAmbiguous"
+  "output": "※East Asian\nWidthプロパティが\nAmbiguous"
 }

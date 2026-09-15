@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Routed known-Language formatting through an atomic whole-document `Formatter` boundary. (#104)
 - Added validation for malformed language formatting plans before output construction. (#104)
 - Refactored physical line wrapping into a shared, language-independent break planner. (#104)
+- Added conservative syntax-aware Markdown prose wrapping through the formatter
+  policy pipeline. (#104)
 
 ## v0.0.7 - 2026-09-11
 

@@ -8,6 +8,8 @@
 // adapters and planner consumers in the migration sequence. The item-level
 // allowances below are limited to those staged, not-yet-reachable pieces.
 
+pub(crate) mod markdown;
+
 use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -85,7 +87,6 @@ pub(crate) enum LanguageFormatError {
 }
 
 /// The internal seam implemented by each supported language adapter.
-#[allow(dead_code)]
 pub(crate) trait LanguageFormatPolicy {
     fn plan_spacing_edits(
         &self,

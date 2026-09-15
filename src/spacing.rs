@@ -4,7 +4,7 @@ pub(crate) use crate::formatting::TextEdit;
 
 use unicode_general_category::{GeneralCategory, get_general_category};
 
-use crate::config::{Config, SpacingRule};
+use crate::config::{SpacingConfig, SpacingRule};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum CharType {
@@ -20,7 +20,7 @@ enum CharType {
 /// The ranges are UTF-8 byte ranges relative to `text`. Markdown syntax is
 /// intentionally not considered here; callers that understand a syntax tree
 /// filter these edits before applying them.
-pub(crate) fn spacing_edits(config: &Config, text: &str) -> Vec<TextEdit> {
+pub(crate) fn spacing_edits(config: &SpacingConfig, text: &str) -> Vec<TextEdit> {
     let characters = text_characters(text);
     let mut edits = Vec::new();
 
@@ -111,14 +111,10 @@ fn is_spacing_pair(left: CharType, right: CharType) -> bool {
     )
 }
 
-fn spacing_rule(config: &Config, left: CharType, right: CharType) -> SpacingRule {
+fn spacing_rule(config: &SpacingConfig, left: CharType, right: CharType) -> SpacingRule {
     match (left, right) {
-        (CharType::Cjk, CharType::Digit) | (CharType::Digit, CharType::Cjk) => {
-            config.spacing.digits
-        }
-        (CharType::Cjk, CharType::Latin) | (CharType::Latin, CharType::Cjk) => {
-            config.spacing.alphabets
-        }
+        (CharType::Cjk, CharType::Digit) | (CharType::Digit, CharType::Cjk) => config.digits,
+        (CharType::Cjk, CharType::Latin) | (CharType::Latin, CharType::Cjk) => config.alphabets,
         _ => SpacingRule::Ignore,
     }
 }
@@ -222,14 +218,11 @@ mod tests {
 
     use super::*;
 
-    fn make_config(alphabets: SpacingRule, digits: SpacingRule) -> Config {
-        let mut config = Config::default();
-        config.spacing.alphabets = alphabets;
-        config.spacing.digits = digits;
-        config
+    fn make_config(alphabets: SpacingRule, digits: SpacingRule) -> SpacingConfig {
+        SpacingConfig { alphabets, digits }
     }
 
-    fn edits(config: &Config, text: &str) -> Vec<(Range<usize>, String)> {
+    fn edits(config: &SpacingConfig, text: &str) -> Vec<(Range<usize>, String)> {
         spacing_edits(config, text)
             .into_iter()
             .map(|edit| (edit.range, edit.replacement))

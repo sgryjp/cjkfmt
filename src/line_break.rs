@@ -1,6 +1,7 @@
 //! Language-independent planning for physical line breaks.
 use std::{ops::Range, sync::Arc};
 
+use unicode_general_category::{GeneralCategory, get_general_category};
 use unicode_linebreak::{BreakClass, break_property};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -258,6 +259,15 @@ impl LineBreakPlanner {
             return false;
         }
 
+        if is_no_break_grapheme(preceding)
+            || is_no_break_grapheme(following)
+            || is_immediately_adjacent_to_zero_width_joiner(&line[..range.start], true)
+            || is_immediately_adjacent_to_zero_width_joiner(&line[range.end..end], false)
+            || is_no_break_adjacent_to_modifier(&line[..range.start], true)
+            || is_no_break_adjacent_to_modifier(&line[range.end..end], false)
+        {
+            return false;
+        }
         if range.is_empty() {
             return is_breakable(preceding, following);
         }
@@ -272,6 +282,9 @@ impl LineBreakPlanner {
         let Some(last_replaced) = replaced.graphemes(true).next_back() else {
             return false;
         };
+        if is_no_break_grapheme(first_replaced) || is_no_break_grapheme(last_replaced) {
+            return false;
+        }
         is_breakable(preceding, first_replaced) || is_breakable(last_replaced, following)
     }
 
@@ -314,10 +327,65 @@ fn is_breakable(preceding: &str, following: &str) -> bool {
         (_, BreakClass::Before) => false,
         (BreakClass::BeforeAndAfter, _) => false,
         (_, BreakClass::BeforeAndAfter) => false,
+        (BreakClass::NonBreakingGlue | BreakClass::WordJoiner | BreakClass::ZeroWidthJoiner, _) => {
+            false
+        }
+        (_, BreakClass::NonBreakingGlue | BreakClass::WordJoiner | BreakClass::ZeroWidthJoiner) => {
+            false
+        }
         (BreakClass::Alphabetic, BreakClass::Alphabetic) => false,
         (_, BreakClass::Space) => false,
         (_, _) => true,
     }
+}
+
+fn is_no_break_grapheme(grapheme: &str) -> bool {
+    grapheme.chars().any(is_no_break_character)
+}
+
+fn is_immediately_adjacent_to_zero_width_joiner(text: &str, reverse: bool) -> bool {
+    if reverse {
+        text.ends_with('\u{200d}')
+    } else {
+        text.starts_with('\u{200d}')
+    }
+}
+
+fn is_no_break_adjacent_to_modifier(text: &str, reverse: bool) -> bool {
+    if reverse {
+        modifier_run_has_no_break(text.chars().rev())
+    } else {
+        modifier_run_has_no_break(text.chars())
+    }
+}
+
+fn modifier_run_has_no_break(characters: impl Iterator<Item = char>) -> bool {
+    let mut saw_modifier = false;
+    for character in characters {
+        if is_combining_mark_or_variation_selector(character) {
+            saw_modifier = true;
+        } else {
+            return saw_modifier && (is_no_break_character(character) || character == '\u{200d}');
+        }
+    }
+    false
+}
+
+fn is_no_break_character(character: char) -> bool {
+    matches!(character, '\u{00a0}' | '\u{202f}')
+        || matches!(
+            break_property(character as u32),
+            BreakClass::NonBreakingGlue | BreakClass::WordJoiner
+        )
+}
+
+fn is_combining_mark_or_variation_selector(character: char) -> bool {
+    matches!(
+        get_general_category(character),
+        GeneralCategory::NonspacingMark
+            | GeneralCategory::SpacingMark
+            | GeneralCategory::EnclosingMark
+    ) || matches!(character, '\u{fe00}'..='\u{fe0f}' | '\u{e0100}'..='\u{e01ef}')
 }
 
 fn is_horizontal_whitespace(character: char) -> bool {
@@ -424,6 +492,73 @@ mod tests {
 
         assert_eq!(selected[0].replace, 3..3);
         assert_eq!(&line[..selected[0].replace.start], "あ");
+    }
+
+    #[rstest]
+    #[case("a\u{00a0}b", 1..3)]
+    #[case("a\u{202f}b", 1..4)]
+    #[case("a\u{2060}b", 1..4)]
+    #[case("a\u{200d}b", 1..4)]
+    #[case("a\u{00a0} b", 3..4)]
+    #[case("a\u{202f} b", 4..5)]
+    #[case("a\u{2060} b", 4..5)]
+    #[case("a\u{200d} b", 4..5)]
+    fn plan_breaks_does_not_split_at_glue_or_joiners(
+        #[case] line: &str,
+        #[case] replace: Range<usize>,
+    ) {
+        let selected =
+            planner(2).plan_breaks(line, &[opportunity(replace.start, replace.end, "")], "\n");
+
+        assert!(selected.is_empty());
+    }
+
+    #[rstest]
+    #[case("漢\u{00a0}\u{0308}漢")]
+    #[case("漢\u{2060}\u{0308}漢")]
+    #[case("漢\u{200d}\u{0308}漢")]
+    #[case("漢\u{00a0}\u{fe0f}漢")]
+    #[case("漢\u{2060}\u{fe0f}漢")]
+    #[case("漢\u{200d}\u{fe0f}漢")]
+    fn plan_breaks_does_not_split_empty_seams_adjacent_to_modified_glue_or_joiners(
+        #[case] line: &str,
+    ) {
+        let opportunities = planner(2).legacy_opportunities(line);
+
+        assert!(
+            planner(2)
+                .plan_breaks(line, &opportunities, "\n")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn plan_breaks_allows_a_seam_after_a_completed_emoji_zwj_cluster() {
+        let line = "👩‍👩 bbbb";
+        let space = line.find(' ').unwrap();
+        let selected = planner(4).plan_breaks(line, &[opportunity(space, space + 1, "")], "\n");
+
+        assert_eq!(
+            selected,
+            [SelectedBreak {
+                replace: space..space + 1,
+                line_ending: "\n".to_owned(),
+                continuation: String::new(),
+            }]
+        );
+    }
+
+    #[rstest]
+    #[case("👩‍ bbbb")]
+    #[case("👩 \u{200d}bbbb")]
+    fn plan_breaks_rejects_seams_immediately_adjacent_to_a_zero_width_joiner(#[case] line: &str) {
+        let space = line.find(' ').unwrap();
+
+        assert!(
+            planner(2)
+                .plan_breaks(line, &[opportunity(space, space + 1, "")], "\n")
+                .is_empty()
+        );
     }
 
     #[test]
