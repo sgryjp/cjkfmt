@@ -2,9 +2,7 @@ use crate::core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, po
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    config::Config,
-    document::Document,
-    line_break::{BreakPoint, LineBreaker},
+    config::Config, document::Document, line_break::LineBreakPlanner,
     spacing_checker::SpacingChecker,
 };
 
@@ -15,7 +13,7 @@ pub(crate) fn check_one_file(
     let mut diagnostics = Vec::new();
 
     // Initialize required components
-    let breaker = LineBreaker::builder()
+    let breaker = LineBreakPlanner::builder()
         .ambiguous_width(config.ambiguous_width)
         .max_width(config.max_width)
         .build()?;
@@ -35,20 +33,12 @@ pub(crate) fn check_one_file(
 }
 
 fn check_line_length(
-    breaker: &LineBreaker,
+    breaker: &LineBreakPlanner,
     document: &Document,
     line_index: u32,
     line: &str,
 ) -> Option<Diagnostic> {
-    let overflow_pos = match breaker.next_line_break(line) {
-        BreakPoint::WrapPoint {
-            overflow_pos,
-            adjustment: _,
-        } => overflow_pos,
-        BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => {
-            return None;
-        }
-    };
+    let overflow_pos = breaker.first_overflow(line)?;
     let (precedings, followings) = line.split_at(overflow_pos);
     let column_index = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
     let start = Position::new(line_index, column_index);

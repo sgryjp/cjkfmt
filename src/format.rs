@@ -3,7 +3,7 @@ use crate::{
     config::Config,
     formatting::{LanguageFormatError, apply_text_edits},
     language::Language,
-    line_break::{BreakPoint, LineBreaker},
+    line_break::LineBreakPlanner,
     markdown_prose::plan_edits,
 };
 
@@ -24,13 +24,13 @@ pub(crate) enum FormatError {
 #[derive(Debug)]
 pub(crate) struct Formatter {
     config: Config,
-    line_breaker: LineBreaker,
+    line_breaker: LineBreakPlanner,
 }
 
 impl Formatter {
     /// Creates a formatter after validating the configuration it will use.
     pub(crate) fn new(config: &Config) -> Result<Self, FormatError> {
-        let line_breaker = LineBreaker::builder()
+        let line_breaker = LineBreakPlanner::builder()
             .ambiguous_width(config.ambiguous_width)
             .max_width(config.max_width)
             .build()
@@ -89,20 +89,18 @@ impl Formatter {
             if is_terminated {
                 previous_line_ending = line_ending;
             }
-            let mut remaining_line = line;
-
-            while let BreakPoint::WrapPoint {
-                overflow_pos,
-                adjustment,
-            } = self.line_breaker.next_line_break(remaining_line)
-            {
-                let (before, after) = remaining_line.split_at(overflow_pos - adjustment);
-                formatted.push_str(before);
-                formatted.push_str(line_ending);
-                remaining_line = after;
+            let opportunities = self.line_breaker.legacy_opportunities(line);
+            let breaks = self
+                .line_breaker
+                .plan_breaks(line, &opportunities, line_ending);
+            let mut cursor = 0;
+            for selected in breaks {
+                formatted.push_str(&line[cursor..selected.replace.start]);
+                formatted.push_str(&selected.line_ending);
+                formatted.push_str(&selected.continuation);
+                cursor = selected.replace.end;
             }
-
-            formatted.push_str(remaining_line);
+            formatted.push_str(&line[cursor..]);
         }
         Ok(formatted)
     }

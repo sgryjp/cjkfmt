@@ -3,5 +3,13 @@
     "max_width": 4
   },
   "input": "あ」」」",
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "filename": "test_cases/check/line-start-prohibition-003.json",
+      "start": { "line": 0, "column": 2 },
+      "end": { "line": 0, "column": 3 },
+      "code": "W001",
+      "message": "Line length exceeds 4 characters"
+    }
+  ]
 }
