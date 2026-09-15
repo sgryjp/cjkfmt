@@ -1,6 +1,7 @@
 use crate::core::lines_inclusive::LinesInclusiveExt;
 use crate::{
     config::Config,
+    formatting::{LanguageFormatError, apply_text_edits},
     language::Language,
     line_break::{BreakPoint, LineBreaker},
     markdown_prose::plan_edits,
@@ -11,6 +12,9 @@ use crate::{
 pub(crate) enum FormatError {
     #[error("invalid formatter configuration: {0}")]
     Configuration(#[source] anyhow::Error),
+
+    #[error("language formatting plan is invalid: {0}")]
+    Language(#[source] LanguageFormatError),
 
     #[error("failed to format document: {0}")]
     Formatting(#[source] anyhow::Error),
@@ -49,22 +53,21 @@ impl Formatter {
         };
 
         self.format_known_language(language, source)
-            .map_err(FormatError::Formatting)
     }
 
-    fn format_known_language(&self, language: Language, source: &str) -> anyhow::Result<String> {
+    fn format_known_language(
+        &self,
+        language: Language,
+        source: &str,
+    ) -> Result<String, FormatError> {
         // Keep Markdown spacing selection separate from line wrapping. Both
         // known languages retain the existing wrapping pass at this stage.
-        let content = if language == Language::Markdown {
-            let edits = plan_edits(&self.config, source)?;
-            let mut content = source.to_owned();
-            for edit in edits.into_iter().rev() {
-                content.replace_range(edit.range, &edit.replacement);
-            }
-            content
+        let content = (if language == Language::Markdown {
+            let edits = plan_edits(&self.config, source).map_err(FormatError::Formatting)?;
+            apply_text_edits(source, &edits).map_err(FormatError::Language)
         } else {
-            source.to_owned()
-        };
+            Ok(source.to_owned())
+        })?;
 
         let mut formatted = String::with_capacity(content.len());
         // An unterminated final line inherits the preceding physical line's

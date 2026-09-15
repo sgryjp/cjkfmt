@@ -5,7 +5,8 @@ use tree_sitter::Node;
 
 use crate::{
     config::Config,
-    spacing::{TextEdit, spacing_edits},
+    formatting::{TextEdit, validate_text_edits},
+    spacing::spacing_edits,
 };
 
 const EXCLUDED_NODE_KINDS: &[&str] = &[
@@ -68,7 +69,7 @@ pub(crate) fn plan_edits(config: &Config, source: &str) -> anyhow::Result<Vec<Te
         }
     }
 
-    validate_edits(source, &mut edits)?;
+    validate_text_edits(source, &mut edits).map_err(|error| anyhow::anyhow!(error))?;
     Ok(edits)
 }
 
@@ -181,36 +182,6 @@ fn edit_intersects(edit: &Range<usize>, exclusion: &Range<usize>) -> bool {
     } else {
         edit.start < exclusion.end && exclusion.start < edit.end
     }
-}
-
-fn validate_edits(source: &str, edits: &mut [TextEdit]) -> anyhow::Result<()> {
-    edits.sort_by_key(|edit| (edit.range.start, edit.range.end));
-    for edit in edits.iter() {
-        if edit.range.start > edit.range.end
-            || edit.range.end > source.len()
-            || !source.is_char_boundary(edit.range.start)
-            || !source.is_char_boundary(edit.range.end)
-        {
-            anyhow::bail!("spacing edit is not a valid UTF-8 range: {:?}", edit.range);
-        }
-    }
-
-    for pair in edits.windows(2) {
-        let previous = &pair[0].range;
-        let current = &pair[1].range;
-        if previous.end > current.start
-            || (previous.is_empty() && current.is_empty() && previous.start == current.start)
-            || (previous.start == current.start && (!previous.is_empty() || !current.is_empty()))
-        {
-            anyhow::bail!(
-                "overlapping spacing edits: {:?} and {:?}",
-                previous,
-                current
-            );
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -340,7 +311,7 @@ mod tests {
             range: 1..2,
             replacement: String::new(),
         }];
-        assert!(validate_edits("漢", &mut invalid).is_err());
+        assert!(validate_text_edits("漢", &mut invalid).is_err());
 
         let mut overlapping = vec![
             TextEdit {
@@ -352,7 +323,7 @@ mod tests {
                 replacement: " ".to_string(),
             },
         ];
-        assert!(validate_edits("漢", &mut overlapping).is_err());
+        assert!(validate_text_edits("漢", &mut overlapping).is_err());
     }
 
     #[test]
@@ -368,7 +339,7 @@ mod tests {
                 replacement: " ".to_string(),
             },
         ];
-        validate_edits(source, &mut edits).unwrap();
+        validate_text_edits(source, &mut edits).unwrap();
         let mut formatted = source.to_string();
         for edit in edits.into_iter().rev() {
             formatted.replace_range(edit.range, &edit.replacement);

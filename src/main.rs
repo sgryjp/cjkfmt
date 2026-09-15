@@ -5,6 +5,7 @@ mod config;
 mod core;
 mod document;
 mod format;
+mod formatting;
 mod language;
 mod line_break;
 mod markdown_prose;

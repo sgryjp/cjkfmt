@@ -1,14 +1,10 @@
-use std::{ops::Range, str::CharIndices};
+use std::str::CharIndices;
+
+pub(crate) use crate::formatting::TextEdit;
 
 use unicode_general_category::{GeneralCategory, get_general_category};
 
 use crate::config::{Config, SpacingRule};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct TextEdit {
-    pub(crate) range: Range<usize>,
-    pub(crate) replacement: String,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum CharType {
@@ -222,6 +218,8 @@ fn char_type(c: char) -> CharType {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Range;
+
     use super::*;
 
     fn make_config(alphabets: SpacingRule, digits: SpacingRule) -> Config {
