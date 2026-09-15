@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy pipeline. (#104)
 - Routed W002 spacing diagnostics through the selected language formatting
   policy while retaining syntax-independent W001 physical-width diagnostics. (#104)
+- Replaced raw wrapping fixtures with language-aware `Formatter` conformance
+  tests. (#104)
 
 ## v0.0.7 - 2026-09-11
 

@@ -172,13 +172,20 @@ mod tests {
             .unwrap()
     }
 
-    fn has_node_kind(node: tree_sitter::Node<'_>, kind: &str) -> bool {
+    fn node_with_kind<'tree>(
+        node: tree_sitter::Node<'tree>,
+        kind: &str,
+    ) -> Option<tree_sitter::Node<'tree>> {
         if node.kind() == kind {
-            return true;
+            return Some(node);
         }
         let mut cursor = node.walk();
         node.named_children(&mut cursor)
-            .any(|child| has_node_kind(child, kind))
+            .find_map(|child| node_with_kind(child, kind))
+    }
+
+    fn has_node_kind(node: tree_sitter::Node<'_>, kind: &str) -> bool {
+        node_with_kind(node, kind).is_some()
     }
 
     #[test]
@@ -331,32 +338,44 @@ mod tests {
             formatted,
             "[漢\nA](https://example.test/a-very-long-destination)"
         );
-        assert!(
-            !crate::parser::parse(crate::parser::Grammar::Markdown, &formatted)
-                .unwrap()
-                .root_node()
-                .has_error()
+        let inline_tree =
+            crate::parser::parse(crate::parser::Grammar::MarkdownInline, &formatted).unwrap();
+        let root = inline_tree.root_node();
+        assert!(has_node_kind(root, "inline_link"));
+        let destination = node_with_kind(root, "link_destination")
+            .expect("formatted inline link should retain its destination");
+        assert_eq!(
+            &formatted[destination.byte_range()],
+            "https://example.test/a-very-long-destination"
         );
     }
 
     #[test]
-    fn markdown_wraps_each_supported_visible_inline_prose_construct() {
+    fn markdown_wrapping_preserves_supported_inline_constructs() {
         let mut config = config();
         config.max_width = 8;
         let formatter = Formatter::new(&config).unwrap();
 
-        for source in [
-            "*漢漢漢漢漢*",
-            "~~漢漢漢漢漢~~",
-            "[漢漢漢漢漢](dest)",
-            "![漢漢漢漢漢](img)",
+        for (source, expected_node_kinds) in [
+            ("*漢漢漢漢漢*", &["emphasis"][..]),
+            ("~~漢漢漢漢漢~~", &["strikethrough"][..]),
+            ("[漢漢漢漢漢](dest)", &["inline_link", "link_text"][..]),
+            ("![漢漢漢漢漢](img)", &["image_description"][..]),
         ] {
             let formatted = formatter.format(Some(Language::Markdown), source).unwrap();
             assert!(
                 formatted.contains('\n'),
                 "did not wrap {source:?}: {formatted:?}"
             );
-            assert!(!formatted.contains("\nhttps://"));
+
+            let inline_tree =
+                crate::parser::parse(crate::parser::Grammar::MarkdownInline, &formatted).unwrap();
+            for node_kind in expected_node_kinds {
+                assert!(
+                    has_node_kind(inline_tree.root_node(), node_kind),
+                    "formatted construct no longer has {node_kind:?}: {formatted:?}"
+                );
+            }
         }
     }
 

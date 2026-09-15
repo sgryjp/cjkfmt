@@ -412,6 +412,16 @@ mod tests {
         }
     }
 
+    // Do not use `legacy_opportunities`: this must remain a
+    // language-independent planner test after the legacy path is removed.
+    fn grapheme_seams(line: &str) -> Vec<LineRelativeBreakOpportunity> {
+        line.grapheme_indices(true)
+            .map(|(offset, _)| offset)
+            .filter(|&offset| offset > 0)
+            .map(|offset| opportunity(offset, offset, ""))
+            .collect()
+    }
+
     #[rstest]
     #[case("a", "a", false)]
     #[case("a", "あ", true)]
@@ -487,7 +497,7 @@ mod tests {
     fn plan_breaks_preserves_graphemes_uax14_and_kinsoku() {
         let planner = planner(7);
         let line = "あ「🐈‍⬛」う";
-        let opportunities = planner.legacy_opportunities(line);
+        let opportunities = grapheme_seams(line);
 
         let selected = planner.plan_breaks(line, &opportunities, "\n");
 
@@ -524,7 +534,7 @@ mod tests {
     fn plan_breaks_does_not_split_empty_seams_adjacent_to_modified_glue_or_joiners(
         #[case] line: &str,
     ) {
-        let opportunities = planner(2).legacy_opportunities(line);
+        let opportunities = grapheme_seams(line);
 
         assert!(
             planner(2)
@@ -571,6 +581,5 @@ mod tests {
     #[test]
     fn line_endings_are_not_considered_breakable_content() {
         assert_eq!(planner(2).first_overflow("あ\r\n"), None);
-        assert_eq!(planner(2).legacy_opportunities("あ\r\n").len(), 0);
     }
 }
