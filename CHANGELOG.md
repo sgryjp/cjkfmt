@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Centralized CLI and filename language selection in the canonical `Language` type for shared use by
+  forthcoming formatter, check, and parser interactions. (#104)
+
 ## v0.0.7 - 2026-09-11
 
 ### Added

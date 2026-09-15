@@ -6,7 +6,7 @@ use std::{
 
 use crate::{config::Config, format::format_one_file};
 
-use super::args::Language;
+use crate::language::Language;
 
 pub fn format_command<W: std::io::Write, P: AsRef<Path>>(
     stdout: &mut W,
@@ -38,19 +38,19 @@ where
     if filenames.is_empty() && !write {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        format_one_file(stdout, config, language.map(Language::grammar), &content)?;
+        format_one_file(stdout, config, language, &content)?;
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let file_grammar = Language::grammar_or_inferred_path(language, filename);
+            let language = Language::explicit_or_inferred_path(language, filename);
             let content = fs::read_to_string(filename)?;
 
             if write {
                 let mut formatted = Vec::new();
-                format_one_file(&mut formatted, config, file_grammar, &content)?;
+                format_one_file(&mut formatted, config, language, &content)?;
                 fs::write(filename, formatted)?;
             } else {
-                format_one_file(stdout, config, file_grammar, &content)?;
+                format_one_file(stdout, config, language, &content)?;
             }
         }
     }

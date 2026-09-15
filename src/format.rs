@@ -1,5 +1,3 @@
-use crate::parser::FileGrammar;
-
 use crate::core::lines_inclusive::LinesInclusiveExt;
 use crate::{
     config::Config,
@@ -10,12 +8,12 @@ use crate::{
 pub(crate) fn format_one_file<W: std::io::Write>(
     stdout: &mut W,
     config: &Config,
-    file_grammar: Option<FileGrammar>,
+    language: Option<crate::language::Language>,
     content: &str,
 ) -> Result<(), anyhow::Error> {
     // Keep Markdown spacing selection separate from line wrapping. Both
     // Markdown and non-Markdown inputs retain the existing wrapping pass.
-    let content = if file_grammar == Some(FileGrammar::Markdown) {
+    let content = if language == Some(crate::language::Language::Markdown) {
         let edits = plan_edits(config, content)?;
         let mut content = content.to_owned();
         for edit in edits.into_iter().rev() {
@@ -70,21 +68,27 @@ mod tests {
         config
     }
 
-    fn format(file_grammar: Option<FileGrammar>, source: &str) -> String {
+    fn format(language: Option<crate::language::Language>, source: &str) -> String {
         let mut output = Vec::new();
-        format_one_file(&mut output, &config(), file_grammar, source).unwrap();
+        format_one_file(&mut output, &config(), language, source).unwrap();
         String::from_utf8(output).unwrap()
     }
 
     #[test]
     fn format_applies_configured_spacing_to_markdown_prose() {
-        assert_eq!(format(Some(FileGrammar::Markdown), "漢A\n"), "漢 A\n");
+        assert_eq!(
+            format(Some(crate::language::Language::Markdown), "漢A\n"),
+            "漢 A\n"
+        );
     }
 
     #[test]
     fn format_preserves_spacing_in_non_markdown_input() {
         let source = "{\"value\":\"漢A\"}\n";
-        assert_eq!(format(Some(FileGrammar::Json), source), source);
+        assert_eq!(
+            format(Some(crate::language::Language::Json), source),
+            source
+        );
         assert_eq!(format(None, source), source);
     }
 
@@ -94,7 +98,13 @@ mod tests {
         config.max_width = 8;
         let source = "漢A one two three\r\n";
         let mut output = Vec::new();
-        format_one_file(&mut output, &config, Some(FileGrammar::Markdown), source).unwrap();
+        format_one_file(
+            &mut output,
+            &config,
+            Some(crate::language::Language::Markdown),
+            source,
+        )
+        .unwrap();
 
         let output = String::from_utf8(output).unwrap();
         assert_eq!(output, "漢 A \r\none two \r\nthree\r\n");
@@ -106,7 +116,13 @@ mod tests {
         config.max_width = 8;
         let source = "漢A one two three\n";
         let mut output = Vec::new();
-        format_one_file(&mut output, &config, Some(FileGrammar::Markdown), source).unwrap();
+        format_one_file(
+            &mut output,
+            &config,
+            Some(crate::language::Language::Markdown),
+            source,
+        )
+        .unwrap();
 
         let output = String::from_utf8(output).unwrap();
         assert_eq!(output, "漢 A \none two \nthree\n");
@@ -118,7 +134,13 @@ mod tests {
         config.max_width = 8;
         let source = "漢A one two three\r\n漢A one two three\n";
         let mut output = Vec::new();
-        format_one_file(&mut output, &config, Some(FileGrammar::Markdown), source).unwrap();
+        format_one_file(
+            &mut output,
+            &config,
+            Some(crate::language::Language::Markdown),
+            source,
+        )
+        .unwrap();
 
         let output = String::from_utf8(output).unwrap();
         assert_eq!(

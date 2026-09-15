@@ -5,5 +5,6 @@ mod grammar;
 mod node_visitor;
 mod parse;
 
-pub use grammar::{FileGrammar, Grammar, grammar_from_path};
+pub use grammar::Grammar;
+pub(crate) use grammar::grammar_for;
 pub use parse::parse;

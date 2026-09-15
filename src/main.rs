@@ -5,6 +5,7 @@ mod config;
 mod core;
 mod document;
 mod format;
+mod language;
 mod line_break;
 mod markdown_prose;
 mod parser;
@@ -64,7 +65,8 @@ mod file_based_tests {
 
     use crate::core::diagnostic::Diagnostic;
     use crate::core::position::Position;
-    use crate::parser::{FileGrammar, Grammar};
+    use crate::language::Language;
+    use crate::parser::Grammar;
     use regex::Regex;
     use serde::Deserialize;
     use serde_json::{self};
@@ -168,7 +170,7 @@ mod file_based_tests {
         format_one_file(
             &mut actual,
             &test_case.config,
-            Some(FileGrammar::Markdown),
+            Some(Language::Markdown),
             &test_case.input,
         )
         .unwrap_or_else(|_| panic!("failed on formatting a file: {resource:?}"));
