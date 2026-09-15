@@ -220,7 +220,7 @@ mod tests {
     fn format_command_language_json_suppresses_spacing_but_still_wraps() {
         let mut config = config();
         config.max_width = 8;
-        let source = "漢A one two\n";
+        let source = "{\"漢A\":[\"one\",\"two\",\"three\"]}\n";
         let mut input = source.as_bytes();
         let mut output = Vec::new();
         format_command_with_reader(
@@ -234,7 +234,7 @@ mod tests {
         .unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        assert_ne!(output, source, "general line wrapping should still run");
+        assert_ne!(output, source, "valid JSON should wrap at token seams");
         assert!(
             output.contains("漢A"),
             "JSON selection must suppress Markdown spacing"

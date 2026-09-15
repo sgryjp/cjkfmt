@@ -8,6 +8,7 @@
 // adapters and planner consumers in the migration sequence. The item-level
 // allowances below are limited to those staged, not-yet-reachable pieces.
 
+pub(crate) mod json;
 pub(crate) mod markdown;
 
 use std::ops::Range;

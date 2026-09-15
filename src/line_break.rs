@@ -224,6 +224,7 @@ impl LineBreakPlanner {
 
     /// Supplies every grapheme seam to the common planner for legacy callers.
     /// Language policies will replace this list with an explicit allow-list.
+    #[allow(dead_code)] // Retained for the final legacy-path removal migration step.
     pub(crate) fn legacy_opportunities(&self, line: &str) -> Vec<LineRelativeBreakOpportunity> {
         let end = content_end(line);
         line[..end]

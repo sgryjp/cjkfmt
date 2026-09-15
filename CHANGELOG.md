@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored physical line wrapping into a shared, language-independent break planner. (#104)
 - Added conservative syntax-aware Markdown prose wrapping through the formatter
   policy pipeline. (#104)
+- Added syntax-preserving JSON wrapping at legal token seams through the formatter
+  policy pipeline. (#104)
 
 ## v0.0.7 - 2026-09-11
 

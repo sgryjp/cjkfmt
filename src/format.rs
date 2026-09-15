@@ -3,7 +3,7 @@ use crate::{
     config::Config,
     formatting::{
         BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, apply_text_edits,
-        markdown::MarkdownFormatPolicy, validate_break_opportunities,
+        json::JsonFormatPolicy, markdown::MarkdownFormatPolicy, validate_break_opportunities,
     },
     language::Language,
     line_break::{LineBreakPlanner, LineRelativeBreakOpportunity},
@@ -59,27 +59,27 @@ impl Formatter {
         language: Language,
         source: &str,
     ) -> Result<String, FormatError> {
-        // Markdown is planned against S0, reparsed against S1, and only then
-        // passed to the common line-break planner. JSON retains its legacy
-        // wrapping path until the JSON policy migration step.
-        if language == Language::Markdown {
-            let policy = MarkdownFormatPolicy;
-            let edits = policy
-                .plan_spacing_edits(source, &self.config.spacing)
-                .map_err(FormatError::Language)?;
-            let content = apply_text_edits(source, &edits).map_err(FormatError::Language)?;
-            let mut opportunities = policy
-                .plan_break_opportunities(&content)
-                .map_err(FormatError::Language)?;
-            validate_break_opportunities(&content, &mut opportunities)
-                .map_err(FormatError::Language)?;
-            return self.format_with_opportunities(&content, &opportunities);
+        match language {
+            Language::Markdown => self.format_with_policy(&MarkdownFormatPolicy, source),
+            Language::Json => self.format_with_policy(&JsonFormatPolicy, source),
         }
+    }
 
-        let content = source.to_owned();
-        self.format_lines(&content, |_, line| {
-            self.line_breaker.legacy_opportunities(line)
-        })
+    fn format_with_policy(
+        &self,
+        policy: &dyn LanguageFormatPolicy,
+        source: &str,
+    ) -> Result<String, FormatError> {
+        let edits = policy
+            .plan_spacing_edits(source, &self.config.spacing)
+            .map_err(FormatError::Language)?;
+        let content = apply_text_edits(source, &edits).map_err(FormatError::Language)?;
+        let mut opportunities = policy
+            .plan_break_opportunities(&content)
+            .map_err(FormatError::Language)?;
+        validate_break_opportunities(&content, &mut opportunities)
+            .map_err(FormatError::Language)?;
+        self.format_with_opportunities(&content, &opportunities)
     }
 
     fn format_with_opportunities(
@@ -857,6 +857,91 @@ mod tests {
     }
 
     #[test]
+    fn json_formatter_wraps_valid_ascii_at_legal_token_seams() {
+        let mut config = config();
+        config.max_width = 8;
+        let formatter = Formatter::new(&config).unwrap();
+        let source = r#"{"first":123,"second":[true,false,null],"third":{"nested":"value"}}"#;
+
+        let formatted = formatter.format(Some(Language::Json), source).unwrap();
+
+        serde_json::from_str::<serde_json::Value>(&formatted)
+            .expect("wrapping must preserve valid JSON");
+        assert_ne!(formatted, source);
+        assert_eq!(json_tokens(&formatted), json_tokens(source));
+    }
+
+    #[test]
+    fn json_formatter_wraps_valid_overflow_width_numbers_without_changing_tokens() {
+        let mut config = config();
+        config.max_width = 8;
+        let formatter = Formatter::new(&config).unwrap();
+        let source = r#"{"value":1e400,"items":[true,false]}"#;
+
+        let formatted = formatter.format(Some(Language::Json), source).unwrap();
+
+        serde_json::from_str::<serde_json::Value>(&formatted)
+            .expect("arbitrary-precision validation must accept the formatted JSON");
+        assert_ne!(formatted, source);
+        assert_eq!(json_tokens(&formatted), json_tokens(source));
+        assert_eq!(
+            formatter.format(Some(Language::Json), &formatted).unwrap(),
+            formatted
+        );
+    }
+
+    #[test]
+    fn json_formatter_never_splits_strings_escapes_numbers_or_literals() {
+        let mut config = config();
+        config.max_width = 6;
+        let formatter = Formatter::new(&config).unwrap();
+        let source = r#"["very long \u4e2d escaped \" string",-123.45,true,false,null]"#;
+
+        let formatted = formatter.format(Some(Language::Json), source).unwrap();
+
+        for token in [
+            r#""very long \u4e2d escaped \" string""#,
+            "-123.45",
+            "true",
+            "false",
+            "null",
+        ] {
+            assert!(
+                formatted.contains(token),
+                "split JSON token {token:?}: {formatted:?}"
+            );
+        }
+        serde_json::from_str::<serde_json::Value>(&formatted)
+            .expect("wrapping must preserve valid JSON");
+    }
+
+    #[test]
+    fn json_formatter_leaves_long_indivisible_strings_over_width() {
+        let mut config = config();
+        config.max_width = 4;
+        let formatter = Formatter::new(&config).unwrap();
+        let source = r#""a very long indivisible JSON string""#;
+
+        assert_eq!(
+            formatter.format(Some(Language::Json), source).unwrap(),
+            source
+        );
+    }
+
+    #[test]
+    fn json_formatter_leaves_malformed_input_byte_identical() {
+        let mut config = config();
+        config.max_width = 4;
+        let formatter = Formatter::new(&config).unwrap();
+        let source = "{\"key\": [true, }\r\n";
+
+        assert_eq!(
+            formatter.format(Some(Language::Json), source).unwrap(),
+            source
+        );
+    }
+
+    #[test]
     fn formatter_is_idempotent_for_wrapping_json() {
         let mut config = config();
         config.max_width = 8;
@@ -871,6 +956,100 @@ mod tests {
             formatter.format(Some(Language::Json), &formatted).unwrap(),
             formatted
         );
+    }
+
+    #[test]
+    fn json_formatter_preserves_json_line_terminators_and_wraps_at_token_seams() {
+        let mut config = config();
+        config.max_width = 8;
+        let formatter = Formatter::new(&config).unwrap();
+
+        for source in [
+            "{\"first\":123,\"second\":456}\r\n",
+            "{\"first\":123,\"second\":456}\n",
+            "{\"first\":123,\"second\":456}\r",
+            "{\"first\":123,\r\n\"second\":456,\n\"third\":789\r}",
+            "{\"first\":123,\r\n\"second\":456,\"third\":789}",
+        ] {
+            let formatted = formatter.format(Some(Language::Json), source).unwrap();
+
+            serde_json::from_str::<serde_json::Value>(&formatted)
+                .expect("wrapping must preserve valid JSON");
+            assert_eq!(json_tokens(&formatted), json_tokens(source));
+            assert!(
+                has_terminator_subsequence(
+                    &line_terminators(source),
+                    &line_terminators(&formatted),
+                ),
+                "existing line terminators were not preserved: {source:?} -> {formatted:?}"
+            );
+            assert_eq!(
+                source.ends_with(['\r', '\n']),
+                formatted.ends_with(['\r', '\n']),
+                "formatting changed final-terminator presence: {source:?} -> {formatted:?}"
+            );
+            assert!(
+                formatted.len() > source.len(),
+                "expected JSON token seams to wrap: {source:?} -> {formatted:?}"
+            );
+            assert_eq!(
+                formatter.format(Some(Language::Json), &formatted).unwrap(),
+                formatted,
+                "JSON formatting was not idempotent: {source:?} -> {formatted:?}"
+            );
+        }
+    }
+
+    fn has_terminator_subsequence(expected: &[&str], actual: &[&str]) -> bool {
+        let mut expected = expected.iter();
+        let mut next_expected = expected.next();
+        for terminator in actual {
+            if next_expected == Some(terminator) {
+                next_expected = expected.next();
+            }
+        }
+        next_expected.is_none()
+    }
+
+    fn line_terminators(source: &str) -> Vec<&str> {
+        source
+            .lines_inclusive()
+            .filter_map(|line| {
+                if line.ends_with("\r\n") {
+                    Some("\r\n")
+                } else if line.ends_with('\r') {
+                    Some("\r")
+                } else if line.ends_with('\n') {
+                    Some("\n")
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn json_tokens(source: &str) -> String {
+        let mut tokens = String::new();
+        let mut in_string = false;
+        let mut escaped = false;
+        for character in source.chars() {
+            if in_string {
+                tokens.push(character);
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == '"' {
+                    in_string = false;
+                }
+            } else if character == '"' {
+                in_string = true;
+                tokens.push(character);
+            } else if !character.is_ascii_whitespace() {
+                tokens.push(character);
+            }
+        }
+        tokens
     }
 
     #[test]
