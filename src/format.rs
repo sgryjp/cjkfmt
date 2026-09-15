@@ -199,6 +199,26 @@ mod tests {
     }
 
     #[test]
+    fn known_languages_do_not_fall_back_to_raw_grapheme_seams() {
+        let mut config = config();
+        config.max_width = 4;
+        let formatter = Formatter::new(&config).unwrap();
+
+        for (language, source) in [
+            (Language::Markdown, "`an indivisible code span`"),
+            (Language::Markdown, "```\nan unterminated fence"),
+            (Language::Json, r#""an indivisible JSON string""#),
+            (Language::Json, r#"{"broken": [true, }"#),
+        ] {
+            assert_eq!(
+                formatter.format(Some(language), source).unwrap(),
+                source,
+                "{language:?} formatting fell back to raw grapheme seams: {source:?}"
+            );
+        }
+    }
+
+    #[test]
     fn format_one_file_writes_nothing_when_formatter_creation_fails() {
         let mut config = config();
         config.max_width = 1;

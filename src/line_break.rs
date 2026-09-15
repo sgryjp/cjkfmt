@@ -222,22 +222,6 @@ impl LineBreakPlanner {
         selected
     }
 
-    /// Supplies every grapheme seam to the common planner for legacy callers.
-    /// Language policies will replace this list with an explicit allow-list.
-    #[allow(dead_code)] // Retained for the final legacy-path removal migration step.
-    pub(crate) fn legacy_opportunities(&self, line: &str) -> Vec<LineRelativeBreakOpportunity> {
-        let end = content_end(line);
-        line[..end]
-            .grapheme_indices(true)
-            .map(|(offset, _)| offset)
-            .filter(|&offset| offset > 0)
-            .map(|offset| LineRelativeBreakOpportunity {
-                replace: offset..offset,
-                continuation: String::new(),
-            })
-            .collect()
-    }
-
     fn is_safe_opportunity(
         &self,
         line: &str,
@@ -412,8 +396,6 @@ mod tests {
         }
     }
 
-    // Do not use `legacy_opportunities`: this must remain a
-    // language-independent planner test after the legacy path is removed.
     fn grapheme_seams(line: &str) -> Vec<LineRelativeBreakOpportunity> {
         line.grapheme_indices(true)
             .map(|(offset, _)| offset)
