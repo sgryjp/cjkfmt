@@ -9,23 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Changed
+### Added
 
-- Centralized CLI and filename language selection in the canonical `Language` type for shared use by
-  forthcoming formatter, check, and parser interactions. (#104)
-- Routed known-Language formatting through an atomic whole-document `Formatter` boundary. (#104)
-- Added validation for malformed language formatting plans before output construction. (#104)
-- Refactored physical line wrapping into a shared, language-independent break planner. (#104)
-- Added conservative syntax-aware Markdown prose wrapping through the formatter
-  policy pipeline. (#104)
-- Added syntax-preserving JSON wrapping at legal token seams through the formatter
-  policy pipeline. (#104)
-- Routed W002 spacing diagnostics through the selected language formatting
-  policy while retaining syntax-independent W001 physical-width diagnostics. (#104)
-- Replaced raw wrapping fixtures with language-aware `Formatter` conformance
-  tests. (#104)
-- Removed the legacy syntax-blind wrapping path so known-Language formatting
-  uses only syntax-aware policy opportunities. (#104)
+- Preserve Markdown and JSON syntax when wrapping lines. (#113)
 
 ## v0.0.7 - 2026-09-11
 
