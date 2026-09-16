@@ -1,7 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use figment::{
@@ -12,44 +9,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{AmbiguousWidth, SpacingRule};
 
+use crate::language::Language;
+
 #[derive(ValueEnum, Debug, Clone, Deserialize, Serialize)]
 pub enum ColorOutputMode {
     Always,
     Never,
     Auto,
-}
-
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Language {
-    Markdown,
-    Json,
-}
-
-impl Language {
-    pub fn grammar(self) -> crate::parser::FileGrammar {
-        match self {
-            Self::Markdown => crate::parser::FileGrammar::Markdown,
-            Self::Json => crate::parser::FileGrammar::Json,
-        }
-    }
-
-    /// Resolve an explicit override or the canonical filename selection.
-    pub fn grammar_or_inferred_path(
-        language: Option<Self>,
-        path: &Path,
-    ) -> Option<crate::parser::FileGrammar> {
-        language
-            .map(Self::grammar)
-            .or_else(|| crate::parser::grammar_from_path(path))
-    }
-
-    pub fn grammar_or_markdown_default(language: Option<Self>) -> crate::parser::Grammar {
-        match language {
-            Some(language) => language.grammar().into(),
-            None => crate::parser::Grammar::Markdown,
-        }
-    }
 }
 
 #[derive(Parser, Debug, Deserialize, Serialize)]
@@ -163,6 +129,8 @@ pub enum Commands {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use figment::{Figment, providers::Serialized};
     use rstest::rstest;
 
@@ -243,45 +211,33 @@ mod tests {
     }
 
     #[test]
-    fn language_resolution_prefers_an_explicit_file_grammar() {
+    fn language_resolution_prefers_an_explicit_language() {
         assert_eq!(
-            Language::grammar_or_inferred_path(
+            Language::explicit_or_inferred_path(
                 Some(Language::Markdown),
                 Path::new("document.json"),
             ),
-            Some(crate::parser::FileGrammar::Markdown)
+            Some(Language::Markdown)
         );
         assert_eq!(
-            Language::grammar_or_inferred_path(Some(Language::Json), Path::new("document.txt")),
-            Some(crate::parser::FileGrammar::Json)
+            Language::explicit_or_inferred_path(Some(Language::Json), Path::new("document.txt")),
+            Some(Language::Json)
         );
     }
 
     #[test]
     fn language_resolution_uses_canonical_filename_extensions() {
         assert_eq!(
-            Language::grammar_or_inferred_path(None, Path::new("document.MarkDown")),
-            Some(crate::parser::FileGrammar::Markdown)
+            Language::explicit_or_inferred_path(None, Path::new("document.MarkDown")),
+            Some(Language::Markdown)
         );
         assert_eq!(
-            Language::grammar_or_inferred_path(None, Path::new("document.JSON")),
-            Some(crate::parser::FileGrammar::Json)
+            Language::explicit_or_inferred_path(None, Path::new("document.JSON")),
+            Some(Language::Json)
         );
         assert_eq!(
-            Language::grammar_or_inferred_path(None, Path::new("document.txt")),
+            Language::explicit_or_inferred_path(None, Path::new("document.txt")),
             None
-        );
-    }
-
-    #[test]
-    fn language_resolution_uses_markdown_for_stdin_only_when_requested() {
-        assert_eq!(
-            Language::grammar_or_markdown_default(None),
-            crate::parser::Grammar::Markdown
-        );
-        assert_eq!(
-            Language::grammar_or_markdown_default(Some(Language::Json)),
-            crate::parser::Grammar::Json
         );
     }
 

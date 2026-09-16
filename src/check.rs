@@ -2,20 +2,24 @@ use crate::core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, po
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    config::Config,
-    document::Document,
-    line_break::{BreakPoint, LineBreaker},
+    config::Config, document::Document, language::Language, line_break::LineBreakPlanner,
     spacing_checker::SpacingChecker,
 };
 
-pub(crate) fn check_one_file(
+/// Checks a document using the language selected by the CLI.
+pub(crate) fn check_one_file_with_language(
     config: &Config,
     document: &Document,
+    language: Language,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
+    if crate::parser::grammar_for(language) != document.grammar {
+        anyhow::bail!("selected language does not match the document grammar")
+    }
+
     let mut diagnostics = Vec::new();
 
     // Initialize required components
-    let breaker = LineBreaker::builder()
+    let breaker = LineBreakPlanner::builder()
         .ambiguous_width(config.ambiguous_width)
         .max_width(config.max_width)
         .build()?;
@@ -28,27 +32,36 @@ pub(crate) fn check_one_file(
     }
 
     // Check spacing problems
-    let spacing_checker = SpacingChecker::new(config, document);
+    let spacing_checker = SpacingChecker::new(config, document, language);
     diagnostics.extend(spacing_checker.check()?);
 
     Ok(diagnostics)
 }
 
+/// Checks a parser-backed document using the language corresponding to its
+/// grammar. CLI callers should retain the selected language explicitly.
+#[cfg(test)]
+pub(crate) fn check_one_file(
+    config: &Config,
+    document: &Document,
+) -> Result<Vec<Diagnostic>, anyhow::Error> {
+    let language = match document.grammar {
+        crate::parser::Grammar::Markdown => Language::Markdown,
+        crate::parser::Grammar::Json => Language::Json,
+        crate::parser::Grammar::MarkdownInline => {
+            anyhow::bail!("cannot check a document with the inline Markdown grammar")
+        }
+    };
+    check_one_file_with_language(config, document, language)
+}
+
 fn check_line_length(
-    breaker: &LineBreaker,
+    breaker: &LineBreakPlanner,
     document: &Document,
     line_index: u32,
     line: &str,
 ) -> Option<Diagnostic> {
-    let overflow_pos = match breaker.next_line_break(line) {
-        BreakPoint::WrapPoint {
-            overflow_pos,
-            adjustment: _,
-        } => overflow_pos,
-        BreakPoint::EndOfLine(_) | BreakPoint::EndOfText(_) => {
-            return None;
-        }
-    };
+    let overflow_pos = breaker.first_overflow(line)?;
     let (precedings, followings) = line.split_at(overflow_pos);
     let column_index = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
     let start = Position::new(line_index, column_index);
@@ -213,5 +226,91 @@ mod tests {
                 .iter()
                 .all(|diagnostic| diagnostic.code != "W002")
         );
+    }
+
+    #[test]
+    fn w002_reports_missing_spacing_in_markdown_prose() {
+        let mut config = Config::default();
+        config.spacing.alphabets = SpacingRule::Require;
+        let source = "漢A and `漢A`";
+        let document = Document::new(source, Grammar::Markdown, Some("t.md"));
+
+        let diagnostics = check_one_file(&config, &document).unwrap();
+        let formatted = crate::format::Formatter::new(&config)
+            .unwrap()
+            .format(Some(crate::language::Language::Markdown), source)
+            .unwrap();
+
+        assert_eq!(formatted, "漢 A and `漢A`");
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|item| item.code == "W002")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn w002_does_not_report_spacing_in_json_strings() {
+        let mut config = Config::default();
+        config.spacing.alphabets = SpacingRule::Require;
+        let source = r#"{"value":"漢A"}"#;
+        let document = Document::new(source, Grammar::Json, Some("t.json"));
+
+        let diagnostics = check_one_file(&config, &document).unwrap();
+        let formatted = crate::format::Formatter::new(&config)
+            .unwrap()
+            .format(Some(crate::language::Language::Json), source)
+            .unwrap();
+
+        assert_eq!(formatted, source);
+        assert!(diagnostics.iter().all(|item| item.code != "W002"));
+    }
+
+    #[test]
+    fn w002_does_not_report_spacing_in_malformed_json() {
+        let mut config = Config::default();
+        config.spacing.alphabets = SpacingRule::Require;
+        let source = r#"{"value":"漢A""#;
+        let document = Document::new(source, Grammar::Json, Some("t.json"));
+
+        let diagnostics = check_one_file(&config, &document).unwrap();
+        let formatted = crate::format::Formatter::new(&config)
+            .unwrap()
+            .format(Some(crate::language::Language::Json), source)
+            .unwrap();
+
+        assert_eq!(formatted, source);
+        assert!(diagnostics.iter().all(|item| item.code != "W002"));
+    }
+
+    #[test]
+    fn w001_reports_overlong_indivisible_source_regardless_of_language_policy() {
+        let config = Config {
+            max_width: 5,
+            ..Config::default()
+        };
+        for (source, grammar, filename) in [
+            ("`very-long-code-span`", Grammar::Markdown, "code.md"),
+            (
+                "<https://example.test/very-long-url>",
+                Grammar::Markdown,
+                "url.md",
+            ),
+            (r#""very long JSON string""#, Grammar::Json, "value.json"),
+        ] {
+            let document = Document::new(source, grammar, Some(filename));
+            let diagnostics = check_one_file(&config, &document).unwrap();
+
+            assert_eq!(
+                diagnostics
+                    .iter()
+                    .filter(|item| item.code == "W001")
+                    .count(),
+                1,
+                "did not report physical overflow for {source:?}"
+            );
+        }
     }
 }

@@ -7,7 +7,7 @@ use std::{
 use crate::parser::{Grammar, parse};
 use tree_sitter::{Node, Tree};
 
-use super::args::Language;
+use crate::language::Language;
 
 pub fn debug_cst_command<W, P>(
     stdout: &mut W,
@@ -36,19 +36,21 @@ where
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        let grammar = Language::grammar_or_markdown_default(language);
+        let grammar = language
+            .map(crate::parser::grammar_for)
+            .unwrap_or(crate::parser::Grammar::Markdown);
         write_tree(stdout, grammar, &content)?;
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let file_grammar =
-                Language::grammar_or_inferred_path(language, filename).ok_or_else(|| {
+            let language =
+                Language::explicit_or_inferred_path(language, filename).ok_or_else(|| {
                     anyhow::anyhow!(
                         "could not infer the language for {}; specify it with --language",
                         filename.display()
                     )
                 })?;
-            let grammar: Grammar = file_grammar.into();
+            let grammar: Grammar = crate::parser::grammar_for(language);
             let content = fs::read_to_string(filename)?;
             write_tree(stdout, grammar, &content)?;
         }

@@ -3,9 +3,15 @@ use std::ops::Range;
 use crate::parser::{Grammar, parse};
 use tree_sitter::Node;
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use crate::{
-    config::Config,
-    spacing::{TextEdit, spacing_edits},
+    config::SpacingConfig,
+    formatting::{
+        BreakOpportunity, LanguageFormatError, TextEdit, validate_break_opportunities,
+        validate_text_edits,
+    },
+    spacing::spacing_edits,
 };
 
 const EXCLUDED_NODE_KINDS: &[&str] = &[
@@ -22,19 +28,144 @@ const EXCLUDED_NODE_KINDS: &[&str] = &[
     "backslash_escape",
 ];
 
-/// Plans validated spacing edits for Markdown prose while preserving inline
-/// constructs whose contents are not displayed as ordinary prose.
-pub(crate) fn plan_edits(config: &Config, source: &str) -> anyhow::Result<Vec<TextEdit>> {
-    let block_tree = parse(Grammar::Markdown, source)?;
+const WRAPPING_PROTECTED_NODE_KINDS: &[&str] = &["hard_line_break"];
+
+const PROSE_CONTAINER_KINDS: &[&str] = &[
+    "inline",
+    "emphasis",
+    "strong_emphasis",
+    "strikethrough",
+    "link_text",
+    "image_description",
+];
+
+const EMPHASIS_DELIMITER_KINDS: &[&str] = &["emphasis_delimiter"];
+const UNORDERED_LIST_MARKER_KINDS: &[&str] =
+    &["list_marker_minus", "list_marker_plus", "list_marker_star"];
+
+#[derive(Debug)]
+struct WrappingInlineRange {
+    range: Range<usize>,
+    continuation: String,
+}
+
+// These are all named nodes in the pinned block grammar.  Keeping the list
+// explicit makes a grammar update fail closed instead of silently treating a
+// new construct as ordinary prose.
+const BLOCK_NODE_KINDS: &[&str] = &[
+    "atx_heading",
+    "backslash_escape",
+    "block_quote",
+    "code_fence_content",
+    "document",
+    "fenced_code_block",
+    "html_block",
+    "indented_code_block",
+    "info_string",
+    "inline",
+    "language",
+    "link_destination",
+    "link_label",
+    "link_reference_definition",
+    "link_title",
+    "list",
+    "list_item",
+    "list_marker_dot",
+    "list_marker_minus",
+    "list_marker_parenthesis",
+    "list_marker_plus",
+    "list_marker_star",
+    "paragraph",
+    "pipe_table",
+    "pipe_table_cell",
+    "pipe_table_delimiter_cell",
+    "pipe_table_delimiter_row",
+    "pipe_table_header",
+    "pipe_table_row",
+    "section",
+    "setext_heading",
+    "task_list_marker_checked",
+    "task_list_marker_unchecked",
+    "thematic_break",
+    "atx_h1_marker",
+    "atx_h2_marker",
+    "atx_h3_marker",
+    "atx_h4_marker",
+    "atx_h5_marker",
+    "atx_h6_marker",
+    "block_continuation",
+    "block_quote_marker",
+    "entity_reference",
+    "fenced_code_block_delimiter",
+    "minus_metadata",
+    "numeric_character_reference",
+    "pipe_table_align_left",
+    "pipe_table_align_right",
+    "plus_metadata",
+    "setext_h1_underline",
+    "setext_h2_underline",
+];
+
+// Likewise, this is the named-node allow-list for the inline grammar.  The
+// prose collector still only descends through PROSE_CONTAINER_KINDS.
+const INLINE_NODE_KINDS: &[&str] = &[
+    "backslash_escape",
+    "collapsed_reference_link",
+    "code_span",
+    "code_span_delimiter",
+    "email_autolink",
+    "emphasis",
+    "emphasis_delimiter",
+    "entity_reference",
+    "full_reference_link",
+    "hard_line_break",
+    "html_tag",
+    "image",
+    "image_description",
+    "inline",
+    "inline_link",
+    "latex_block",
+    "latex_span_delimiter",
+    "link_destination",
+    "link_label",
+    "link_text",
+    "link_title",
+    "numeric_character_reference",
+    "shortcut_link",
+    "strikethrough",
+    "strong_emphasis",
+    "uri_autolink",
+];
+
+/// Plans validated spacing edits for legacy unit-test helpers.
+#[cfg(test)]
+pub(crate) fn plan_edits(
+    config: &crate::config::Config,
+    source: &str,
+) -> anyhow::Result<Vec<TextEdit>> {
+    plan_spacing_edits(source, &config.spacing).map_err(|error| anyhow::anyhow!(error))
+}
+
+/// Plans the existing Markdown prose spacing behavior for the policy seam.
+///
+/// This deliberately shares the same inline traversal used by wrapping.  The
+/// spacing engine remains syntax-agnostic; this module owns the CST filtering.
+pub(crate) fn plan_spacing_edits(
+    source: &str,
+    rules: &SpacingConfig,
+) -> Result<Vec<TextEdit>, LanguageFormatError> {
+    let block_tree = parse(Grammar::Markdown, source)
+        .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
     let mut inline_ranges = Vec::new();
     collect_inline_ranges(block_tree.root_node(), &mut inline_ranges);
 
     let mut edits = Vec::new();
     for inline_range in inline_ranges {
-        let inline_source = source
-            .get(inline_range.clone())
-            .ok_or_else(|| anyhow::anyhow!("Markdown inline node has an invalid byte range"))?;
-        let inline_tree = parse(Grammar::MarkdownInline, inline_source)?;
+        let inline_source = source.get(inline_range.clone()).ok_or_else(|| {
+            LanguageFormatError::Policy("Markdown inline node has an invalid byte range".into())
+        })?;
+        let inline_tree = parse(Grammar::MarkdownInline, inline_source)
+            .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
 
         // Recovery trees can contain misleading prose-looking descendants.
         // Keeping the whole inline node unchanged is safer than formatting a
@@ -46,15 +177,13 @@ pub(crate) fn plan_edits(config: &Config, source: &str) -> anyhow::Result<Vec<Te
         }
 
         let mut exclusions = Vec::new();
-        collect_exclusion_ranges(inline_tree.root_node(), &mut exclusions);
-        collect_unrecognized_autolink_ranges(
+        collect_spacing_protected_inline_ranges(
             inline_tree.root_node(),
             inline_source,
             &mut exclusions,
         );
-        merge_ranges(&mut exclusions);
 
-        for edit in spacing_edits(config, inline_source) {
+        for edit in spacing_edits(rules, inline_source) {
             if !exclusions
                 .iter()
                 .any(|exclusion| edit_intersects(&edit.range, exclusion))
@@ -68,8 +197,203 @@ pub(crate) fn plan_edits(config: &Config, source: &str) -> anyhow::Result<Vec<Te
         }
     }
 
-    validate_edits(source, &mut edits)?;
+    validate_text_edits(source, &mut edits)
+        .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
     Ok(edits)
+}
+
+/// Plans conservative Markdown soft-break positions against the post-spacing
+/// source. Ordinary paragraphs, direct blockquotes, and top-level unordered
+/// list items are supported; all other block contexts remain ineligible.
+pub(crate) fn plan_break_opportunities(
+    source: &str,
+) -> Result<Vec<BreakOpportunity>, LanguageFormatError> {
+    let block_tree = parse(Grammar::Markdown, source)
+        .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
+    let root = block_tree.root_node();
+    if root.has_error() || has_missing_node(root) || has_unknown_node(root, BLOCK_NODE_KINDS) {
+        return Ok(Vec::new());
+    }
+
+    let mut inline_ranges = Vec::new();
+    collect_paragraph_inline_ranges(root, false, false, &mut inline_ranges);
+    collect_direct_blockquote_inline_ranges(root, source, &mut inline_ranges);
+    collect_top_level_unordered_list_inline_ranges(root, source, &mut inline_ranges);
+    let mut opportunities = Vec::new();
+    for inline_range in inline_ranges {
+        let inline_source = source.get(inline_range.range.clone()).ok_or_else(|| {
+            LanguageFormatError::Policy("Markdown inline node has an invalid byte range".into())
+        })?;
+        let inline_tree = parse(Grammar::MarkdownInline, inline_source)
+            .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
+        let inline_root = inline_tree.root_node();
+        if inline_root.has_error()
+            || has_missing_node(inline_root)
+            || has_unknown_node(inline_root, INLINE_NODE_KINDS)
+            || has_node_kind(inline_root, "hard_line_break")
+            // The inline grammar exposes raw HTML delimiters as html_tag
+            // nodes but leaves their payload as ordinary text. Treating that
+            // text as prose could split a script/style/body payload while
+            // preserving only the tags, so protect the whole inline range.
+            || has_node_kind(inline_root, "html_tag")
+            || !is_safe_inline_tree(inline_root, inline_source)
+        {
+            continue;
+        }
+
+        // A later break can pair an existing pipe-bearing header fragment
+        // with a delimiter-looking fragment elsewhere in this paragraph.
+        // Without a Markdown layout engine, suppress this whole range rather
+        // than trying to prove each combination of generated seams harmless.
+        if contains_pipe_table_like_syntax(inline_source) {
+            continue;
+        }
+
+        let mut prose_ranges = Vec::new();
+        if !collect_prose_ranges(inline_root, &mut prose_ranges) {
+            continue;
+        }
+        let mut protected_ranges = Vec::new();
+        collect_protected_inline_ranges(inline_root, inline_source, &mut protected_ranges);
+        for range in prose_ranges {
+            for unprotected_range in subtract_ranges(range, &protected_ranges) {
+                collect_range_opportunities(
+                    source,
+                    inline_range.range.start + unprotected_range.start
+                        ..inline_range.range.start + unprotected_range.end,
+                    &inline_range.continuation,
+                    &mut opportunities,
+                );
+            }
+        }
+    }
+
+    validate_break_opportunities(source, &mut opportunities)?;
+    Ok(opportunities)
+}
+
+fn collect_paragraph_inline_ranges(
+    node: Node<'_>,
+    in_paragraph: bool,
+    blocked_context: bool,
+    ranges: &mut Vec<WrappingInlineRange>,
+) {
+    let in_paragraph = in_paragraph || node.kind() == "paragraph";
+    let blocked_context = blocked_context
+        || matches!(
+            node.kind(),
+            "block_quote"
+                | "list"
+                | "list_item"
+                | "atx_heading"
+                | "setext_heading"
+                | "pipe_table"
+                | "pipe_table_cell"
+        );
+    if node.kind() == "inline" {
+        if in_paragraph && !blocked_context {
+            ranges.push(WrappingInlineRange {
+                range: node.byte_range(),
+                continuation: String::new(),
+            });
+        }
+        return;
+    }
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_paragraph_inline_ranges(child, in_paragraph, blocked_context, ranges);
+    }
+}
+
+fn collect_direct_blockquote_inline_ranges(
+    node: Node<'_>,
+    source: &str,
+    ranges: &mut Vec<WrappingInlineRange>,
+) {
+    if node.kind() == "block_quote"
+        && node
+            .parent()
+            .is_some_and(|parent| parent.kind() == "section")
+    {
+        let mut cursor = node.walk();
+        let children = node.named_children(&mut cursor).collect::<Vec<_>>();
+        if let [marker, paragraph] = children.as_slice()
+            && marker.kind() == "block_quote_marker"
+            && paragraph.kind() == "paragraph"
+            && source
+                .get(marker.byte_range())
+                .is_some_and(|text| matches!(text, ">" | "> "))
+            && let Some(inline) = only_inline_child(*paragraph)
+        {
+            ranges.push(WrappingInlineRange {
+                range: inline.byte_range(),
+                continuation: source[marker.byte_range()].to_owned(),
+            });
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_direct_blockquote_inline_ranges(child, source, ranges);
+    }
+}
+
+fn collect_top_level_unordered_list_inline_ranges(
+    node: Node<'_>,
+    source: &str,
+    ranges: &mut Vec<WrappingInlineRange>,
+) {
+    if node.kind() == "list"
+        && node
+            .parent()
+            .is_some_and(|parent| parent.kind() == "section")
+    {
+        let mut cursor = node.walk();
+        for item in node.named_children(&mut cursor) {
+            let mut item_cursor = item.walk();
+            let children = item.named_children(&mut item_cursor).collect::<Vec<_>>();
+            let [marker, paragraph] = children.as_slice() else {
+                continue;
+            };
+            let Some(marker_text) = source.get(marker.byte_range()) else {
+                continue;
+            };
+            if !UNORDERED_LIST_MARKER_KINDS.contains(&marker.kind())
+                || paragraph.kind() != "paragraph"
+                || !marker_text
+                    .chars()
+                    .all(|character| character == ' ' || matches!(character, '-' | '+' | '*'))
+                || marker_text
+                    .chars()
+                    .filter(|&character| matches!(character, '-' | '+' | '*'))
+                    .count()
+                    != 1
+            {
+                continue;
+            }
+            if let Some(inline) = only_inline_child(*paragraph) {
+                ranges.push(WrappingInlineRange {
+                    range: inline.byte_range(),
+                    continuation: " ".repeat(marker_text.len()),
+                });
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_top_level_unordered_list_inline_ranges(child, source, ranges);
+    }
+}
+
+fn only_inline_child(node: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = node.walk();
+    let children = node.named_children(&mut cursor).collect::<Vec<_>>();
+    match children.as_slice() {
+        [inline] if inline.kind() == "inline" => Some(*inline),
+        _ => None,
+    }
 }
 
 fn collect_inline_ranges(node: Node<'_>, ranges: &mut Vec<Range<usize>>) {
@@ -84,6 +408,256 @@ fn collect_inline_ranges(node: Node<'_>, ranges: &mut Vec<Range<usize>>) {
     for child in node.named_children(&mut cursor) {
         collect_inline_ranges(child, ranges);
     }
+}
+
+fn has_missing_node(node: Node<'_>) -> bool {
+    if node.is_missing() {
+        return true;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).any(has_missing_node)
+}
+
+fn has_unknown_node(node: Node<'_>, known_kinds: &[&str]) -> bool {
+    if !known_kinds.contains(&node.kind()) {
+        return true;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .any(|child| has_unknown_node(child, known_kinds))
+}
+
+fn collect_prose_ranges(node: Node<'_>, ranges: &mut Vec<Range<usize>>) -> bool {
+    if !INLINE_NODE_KINDS.contains(&node.kind()) {
+        return false;
+    }
+    if EXCLUDED_NODE_KINDS.contains(&node.kind())
+        || WRAPPING_PROTECTED_NODE_KINDS.contains(&node.kind())
+        || EMPHASIS_DELIMITER_KINDS.contains(&node.kind())
+    {
+        return true;
+    }
+    if !PROSE_CONTAINER_KINDS.contains(&node.kind()) {
+        let mut cursor = node.walk();
+        for child in node.named_children(&mut cursor) {
+            if !collect_prose_ranges(child, ranges) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    let mut children = Vec::new();
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        children.push(child);
+    }
+    let mut offset = node.start_byte();
+    for child in children {
+        if child.start_byte() > offset {
+            ranges.push(offset..child.start_byte());
+        }
+        if !collect_prose_ranges(child, ranges) {
+            return false;
+        }
+        offset = child.end_byte();
+    }
+    if offset < node.end_byte() {
+        ranges.push(offset..node.end_byte());
+    }
+    true
+}
+
+fn collect_range_opportunities(
+    source: &str,
+    range: Range<usize>,
+    continuation: &str,
+    opportunities: &mut Vec<BreakOpportunity>,
+) {
+    let Some(text) = source.get(range.clone()) else {
+        return;
+    };
+    let mut seams = text
+        .grapheme_indices(true)
+        .map(|(offset, grapheme)| (range.start + offset, grapheme));
+    let mut previous = seams.next();
+    while let Some((offset, grapheme)) = previous {
+        let Some((next_offset, next_grapheme)) = seams.next() else {
+            break;
+        };
+        let next = next_offset;
+        if grapheme.chars().all(is_replaceable_horizontal_whitespace) {
+            let mut end = next;
+            let mut following = Some((next_offset, next_grapheme));
+            while let Some((relative, candidate)) = following {
+                if !candidate.chars().all(is_replaceable_horizontal_whitespace) {
+                    break;
+                }
+                end = relative + candidate.len();
+                following = seams.next();
+            }
+            if is_safe_break_position(source, range.start, offset, end) {
+                opportunities.push(BreakOpportunity {
+                    replace: offset..end,
+                    continuation: continuation.to_owned(),
+                });
+            }
+            previous = following;
+        } else {
+            if !next_grapheme
+                .chars()
+                .all(is_replaceable_horizontal_whitespace)
+                && is_safe_break_position(source, range.start, next, next)
+            {
+                opportunities.push(BreakOpportunity {
+                    replace: next..next,
+                    continuation: continuation.to_owned(),
+                });
+            }
+            previous = Some((next_offset, next_grapheme));
+        }
+    }
+}
+
+fn is_safe_break_position(
+    source: &str,
+    prose_start: usize,
+    break_start: usize,
+    break_end: usize,
+) -> bool {
+    if break_start <= prose_start
+        || break_end < break_start
+        || break_end >= source.len()
+        || !source.is_char_boundary(break_start)
+        || !source.is_char_boundary(break_end)
+    {
+        return false;
+    }
+    let Some(previous) = source[..break_start].chars().next_back() else {
+        return false;
+    };
+    let Some(following) = source[break_end..].chars().next() else {
+        return false;
+    };
+    if matches!(previous, '\r' | '\n') || matches!(following, '\r' | '\n') {
+        return false;
+    }
+    // A backslash immediately before the generated newline becomes Markdown's
+    // escaped hard break. The opportunity must not change that line meaning.
+    if previous == '\\' {
+        return false;
+    }
+    // A break between adjacent pipe markers can turn an ordinary paragraph
+    // into a pipe-table header and delimiter row after the next safe break.
+    if previous == '|' && following == '|' {
+        return false;
+    }
+
+    // Check the two physical-line fragments created by this opportunity.
+    // Looking only at `following` misses a delimiter at the end of the first
+    // fragment: replacing its trailing whitespace with a newline can turn
+    // that fragment into a thematic break or setext underline.
+    let line_start = source[..break_start]
+        .rfind(['\r', '\n'])
+        .map_or(0, |offset| offset + 1);
+    let line_end = source[break_end..]
+        .find(['\r', '\n'])
+        .map_or(source.len(), |offset| break_end + offset);
+    if is_standalone_markdown_delimiter(&source[line_start..break_start]) {
+        return false;
+    }
+
+    // A generated line beginning with one of these markers can become a
+    // heading, list, quote, fence, setext heading, or thematic break.
+    // Omitting the seam is safer than trying to infer continuation syntax
+    // from prose alone.
+    if matches!(
+        following,
+        '#' | '>' | '-' | '+' | '*' | '_' | '=' | '`' | '~'
+    ) {
+        return false;
+    }
+    // Keep the suffix calculation coupled to the physical-line check above:
+    // an opportunity must leave an actual non-empty continuation fragment.
+    if break_end >= line_end {
+        return false;
+    }
+    // A line beginning with an HTML-looking prefix may become an HTML block,
+    // including when the candidate is malformed or not recognized by the
+    // grammar. Do not guess whether the source intended prose here: §14's
+    // no-reinterpretation rule requires the unknown case to remain unchanged.
+    if following == '<' {
+        return false;
+    }
+    // An ordered-list marker is also syntax only when its delimiter is
+    // followed by whitespace or the end of the line. Do not reject ordinary
+    // prose beginning with a number merely because it starts a line.
+    if following.is_ascii_digit() {
+        let suffix = &source[break_end..];
+        let digits_end = suffix
+            .char_indices()
+            .take_while(|(_, character)| character.is_ascii_digit())
+            .map(|(index, character)| index + character.len_utf8())
+            .last()
+            .unwrap_or(0);
+        if let Some(delimiter) = suffix[digits_end..].chars().next()
+            && matches!(delimiter, '.' | ')')
+        {
+            let after_delimiter = digits_end + delimiter.len_utf8();
+            if suffix[after_delimiter..]
+                .chars()
+                .next()
+                .is_none_or(char::is_whitespace)
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn is_standalone_markdown_delimiter(fragment: &str) -> bool {
+    let delimiters = fragment
+        .chars()
+        .filter(|&character| !is_horizontal_whitespace(character));
+    let Some(delimiter) = delimiters.clone().next() else {
+        return false;
+    };
+    let minimum = match delimiter {
+        '=' | '-' => 1,
+        '*' | '_' => 3,
+        _ => return false,
+    };
+    delimiters.count() >= minimum
+        && fragment
+            .chars()
+            .all(|character| is_horizontal_whitespace(character) || character == delimiter)
+}
+
+fn contains_pipe_table_like_syntax(text: &str) -> bool {
+    // A pipe-table delimiter row needs at least one pipe and a cell made only
+    // of optional alignment colons, optional whitespace, and three or more
+    // hyphens. Refraining from all wraps in such a paragraph is conservative,
+    // but ordinary prose containing a lone pipe or non-delimiter cell remains
+    // eligible for wrapping.
+    text.contains('|') && text.split('|').any(is_pipe_table_delimiter_cell)
+}
+
+fn is_pipe_table_delimiter_cell(cell: &str) -> bool {
+    let cell = cell.trim_matches(is_horizontal_whitespace);
+    let cell = cell.strip_prefix(':').unwrap_or(cell);
+    let cell = cell.strip_suffix(':').unwrap_or(cell);
+    cell.len() >= 3 && cell.bytes().all(|byte| byte == b'-')
+}
+
+fn is_horizontal_whitespace(character: char) -> bool {
+    character.is_whitespace() && !matches!(character, '\r' | '\n')
+}
+
+// Markdown wrapping may replace only ordinary ASCII spacing. Unicode spaces
+// can be glue or word-joiners, so replacing them could change visible text.
+fn is_replaceable_horizontal_whitespace(character: char) -> bool {
+    matches!(character, ' ' | '\t')
 }
 
 fn is_safe_inline_tree(root: Node<'_>, source: &str) -> bool {
@@ -105,7 +679,28 @@ fn is_safe_inline_tree(root: Node<'_>, source: &str) -> bool {
     true
 }
 
-fn collect_unrecognized_autolink_ranges(
+fn collect_spacing_protected_inline_ranges(
+    root: Node<'_>,
+    source: &str,
+    ranges: &mut Vec<Range<usize>>,
+) {
+    collect_exclusion_ranges(root, ranges);
+    // Preserve the established spacing behavior for malformed candidates:
+    // look through later inline ranges and physical lines for the closing
+    // delimiter. The wrapping pass deliberately uses a narrower, stronger
+    // policy because a generated newline can change block structure.
+    collect_unrecognized_autolink_ranges(root, source, ranges, false, true);
+    merge_ranges(ranges);
+}
+
+fn collect_protected_inline_ranges(root: Node<'_>, source: &str, ranges: &mut Vec<Range<usize>>) {
+    collect_exclusion_ranges(root, ranges);
+    collect_unrecognized_autolink_ranges(root, source, ranges, true, false);
+    collect_unrecognized_html_block_ranges(root, source, ranges);
+    merge_ranges(ranges);
+}
+
+fn collect_unrecognized_html_block_ranges(
     root: Node<'_>,
     source: &str,
     ranges: &mut Vec<Range<usize>>,
@@ -113,18 +708,131 @@ fn collect_unrecognized_autolink_ranges(
     let mut search_start = 0;
     while let Some(relative_start) = source[search_start..].find('<') {
         let start = search_start + relative_start;
-        let Some(relative_end) = source[start + 1..].find('>') else {
-            break;
+        if is_potential_html_block_start(&source[start..])
+            && !has_exclusion_covering(root, start..start + 1)
+        {
+            let end = source[start..]
+                .find(['\r', '\n'])
+                .map_or(source.len(), |relative_end| start + relative_end);
+            ranges.push(start..end);
+        }
+        search_start = start + 1;
+    }
+}
+
+fn is_potential_html_block_start(source: &str) -> bool {
+    if source.starts_with("<!--") || source.starts_with("<?") || source.starts_with("<![CDATA[") {
+        return true;
+    }
+    if let Some(declaration) = source.strip_prefix("<!") {
+        return declaration
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_uppercase());
+    }
+
+    let Some(after_open) = source.strip_prefix('<') else {
+        return false;
+    };
+    let after_slash = after_open.strip_prefix('/').unwrap_or(after_open);
+    let tag_end = after_slash
+        .char_indices()
+        .find(|(_, character)| !character.is_ascii_alphabetic())
+        .map_or(after_slash.len(), |(offset, _)| offset);
+    if tag_end == 0 {
+        return false;
+    }
+    // The grammar already handles recognized HTML tags. For a recovery or
+    // future tag, an alphabetic name is enough to make a line-start split
+    // syntax-sensitive; keeping a second block-tag table here would not add a
+    // distinct safety guarantee.
+    match after_slash[tag_end..].chars().next() {
+        None | Some('>') | Some('/') => true,
+        Some(character) => character.is_whitespace(),
+    }
+}
+
+fn collect_unrecognized_autolink_ranges(
+    root: Node<'_>,
+    source: &str,
+    ranges: &mut Vec<Range<usize>>,
+    protect_unclosed: bool,
+    search_across_lines: bool,
+) {
+    let mut search_start = 0;
+    while let Some(relative_start) = source[search_start..].find('<') {
+        let start = search_start + relative_start;
+        let search_end = if search_across_lines {
+            source.len()
+        } else {
+            source[start..]
+                .find(['\r', '\n'])
+                .map_or(source.len(), |offset| start + offset)
         };
-        let end = start + 1 + relative_end + 1;
+        let suffix = &source[start + 1..search_end];
+        let Some(close_offset) = suffix.find('>') else {
+            // Once a URI/email-shaped candidate has no closing delimiter, the
+            // grammar cannot tell where its malformed construct ends. Protect
+            // the complete remaining inline range instead of splitting at the
+            // first whitespace and reclassifying its trailing payload as prose.
+            if protect_unclosed
+                && is_autolink_candidate(suffix)
+                && !has_exclusion_covering(root, start..search_end)
+            {
+                ranges.push(start..search_end);
+            }
+            search_start = search_end;
+            continue;
+        };
+        let end = start + 1 + close_offset + 1;
         let candidate = &source[start..end];
-        if (candidate.contains('@') || candidate.contains("://"))
+        if is_autolink_candidate(&candidate[1..candidate.len() - 1])
             && !has_exclusion_covering(root, start..end)
         {
             ranges.push(start..end);
         }
         search_start = end;
     }
+}
+
+fn is_autolink_candidate(candidate: &str) -> bool {
+    candidate.contains('@') || candidate.contains("://") || has_uri_scheme(candidate)
+}
+
+fn has_uri_scheme(candidate: &str) -> bool {
+    let Some((scheme, _)) = candidate.split_once(':') else {
+        return false;
+    };
+    let mut characters = scheme.chars();
+    characters
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic())
+        && characters
+            .all(|character| character.is_ascii_alphanumeric() || "+-.".contains(character))
+}
+
+fn subtract_ranges(range: Range<usize>, protected: &[Range<usize>]) -> Vec<Range<usize>> {
+    let mut result = Vec::new();
+    let mut cursor = range.start;
+    for exclusion in protected {
+        if exclusion.end <= cursor {
+            continue;
+        }
+        if exclusion.start >= range.end {
+            break;
+        }
+        if exclusion.start > cursor {
+            result.push(cursor..exclusion.start.min(range.end));
+        }
+        cursor = cursor.max(exclusion.end);
+        if cursor >= range.end {
+            break;
+        }
+    }
+    if cursor < range.end {
+        result.push(cursor..range.end);
+    }
+    result
 }
 
 fn has_exclusion_covering(node: Node<'_>, range: Range<usize>) -> bool {
@@ -183,40 +891,10 @@ fn edit_intersects(edit: &Range<usize>, exclusion: &Range<usize>) -> bool {
     }
 }
 
-fn validate_edits(source: &str, edits: &mut [TextEdit]) -> anyhow::Result<()> {
-    edits.sort_by_key(|edit| (edit.range.start, edit.range.end));
-    for edit in edits.iter() {
-        if edit.range.start > edit.range.end
-            || edit.range.end > source.len()
-            || !source.is_char_boundary(edit.range.start)
-            || !source.is_char_boundary(edit.range.end)
-        {
-            anyhow::bail!("spacing edit is not a valid UTF-8 range: {:?}", edit.range);
-        }
-    }
-
-    for pair in edits.windows(2) {
-        let previous = &pair[0].range;
-        let current = &pair[1].range;
-        if previous.end > current.start
-            || (previous.is_empty() && current.is_empty() && previous.start == current.start)
-            || (previous.start == current.start && (!previous.is_empty() || !current.is_empty()))
-        {
-            anyhow::bail!(
-                "overlapping spacing edits: {:?} and {:?}",
-                previous,
-                current
-            );
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::SpacingRule;
+    use crate::config::{Config, SpacingRule};
 
     fn config(alphabets: SpacingRule, digits: SpacingRule) -> Config {
         let mut config = Config {
@@ -340,7 +1018,7 @@ mod tests {
             range: 1..2,
             replacement: String::new(),
         }];
-        assert!(validate_edits("漢", &mut invalid).is_err());
+        assert!(validate_text_edits("漢", &mut invalid).is_err());
 
         let mut overlapping = vec![
             TextEdit {
@@ -352,7 +1030,36 @@ mod tests {
                 replacement: " ".to_string(),
             },
         ];
-        assert!(validate_edits("漢", &mut overlapping).is_err());
+        assert!(validate_text_edits("漢", &mut overlapping).is_err());
+    }
+
+    #[test]
+    fn setext_delimiter_detection_matches_commonmark_minimums() {
+        assert!(is_standalone_markdown_delimiter("="));
+        assert!(is_standalone_markdown_delimiter("-"));
+        assert!(is_standalone_markdown_delimiter("---"));
+        assert!(!is_standalone_markdown_delimiter("**"));
+        assert!(is_standalone_markdown_delimiter("***"));
+    }
+
+    #[test]
+    fn unknown_node_kinds_are_ineligible_for_wrapping() {
+        assert!(has_unknown_node(
+            parse(Grammar::Markdown, "").unwrap().root_node(),
+            &["not_the_document_kind"]
+        ));
+        assert!(!has_unknown_node(
+            parse(Grammar::Markdown, "").unwrap().root_node(),
+            BLOCK_NODE_KINDS
+        ));
+        assert!(has_unknown_node(
+            parse(Grammar::MarkdownInline, "").unwrap().root_node(),
+            &["not_the_inline_kind"]
+        ));
+        assert!(!has_unknown_node(
+            parse(Grammar::MarkdownInline, "plain").unwrap().root_node(),
+            INLINE_NODE_KINDS
+        ));
     }
 
     #[test]
@@ -368,7 +1075,7 @@ mod tests {
                 replacement: " ".to_string(),
             },
         ];
-        validate_edits(source, &mut edits).unwrap();
+        validate_text_edits(source, &mut edits).unwrap();
         let mut formatted = source.to_string();
         for edit in edits.into_iter().rev() {
             formatted.replace_range(edit.range, &edit.replacement);

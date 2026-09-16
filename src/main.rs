@@ -5,6 +5,8 @@ mod config;
 mod core;
 mod document;
 mod format;
+mod formatting;
+mod language;
 mod line_break;
 mod markdown_prose;
 mod parser;
@@ -64,30 +66,21 @@ mod file_based_tests {
 
     use crate::core::diagnostic::Diagnostic;
     use crate::core::position::Position;
-    use crate::parser::{FileGrammar, Grammar};
+    use crate::parser::Grammar;
     use regex::Regex;
     use serde::Deserialize;
-    use serde_json::{self};
     use test_generator::test_resources;
 
     use crate::_log::test_log;
     use crate::check::check_one_file;
     use crate::cli::utils::format_diagnostic;
     use crate::document::Document;
-    use crate::format::format_one_file;
 
     #[derive(Default, Debug, Deserialize)]
     struct CheckTestCase {
         config: Config,
         input: String,
         diagnostics: Vec<Diagnostic>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FormatTestCase {
-        config: Config,
-        input: String,
-        output: String,
     }
 
     #[test_resources("test_cases/check/*.json")]
@@ -148,33 +141,6 @@ mod file_based_tests {
             .iter()
             .zip(&test_case.diagnostics)
             .for_each(|(a, e)| assert_diagnostics_are_equal(a, e));
-    }
-
-    #[test_resources("test_cases/format/*.json")]
-    fn format(resource: &str) {
-        // Normalize path separators so tests work on both Unix-like and Windows systems
-        let resource = resource.replace('\\', "/");
-
-        // Load the test case from the JSON file
-        let content = std::fs::read_to_string(&resource)
-            .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
-        let test_case: FormatTestCase = serde_json::from_str(&content)
-            .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-
-        // Prepare a buffer to hold the formatted output
-        let mut actual: Vec<u8> = Vec::with_capacity(1024);
-
-        // Run the formatter on the input
-        format_one_file(
-            &mut actual,
-            &test_case.config,
-            Some(FileGrammar::Markdown),
-            &test_case.input,
-        )
-        .unwrap_or_else(|_| panic!("failed on formatting a file: {resource:?}"));
-
-        // Compare the actual output with the expected output
-        assert_eq!(String::from_utf8_lossy(&actual), test_case.output);
     }
 
     fn assert_diagnostics_are_equal(a: &Diagnostic, b: &Diagnostic) {

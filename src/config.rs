@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::args::CliArgs;
 
 /// The configuration for cjkfmt.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     /// How to treat width of characters in the Ambiguous category according to Unicode Standard Annex #11.
@@ -78,7 +78,7 @@ pub enum SpacingRule {
 }
 
 /// Configuration for spacing rules.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SpacingConfig {
     /// How to handle spaces between full-width and half-width alphabets.
