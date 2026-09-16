@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v0.0.8 - 2026-09-16
+
 ### Added
 
 - Preserve Markdown and JSON syntax when wrapping lines. (#113)
