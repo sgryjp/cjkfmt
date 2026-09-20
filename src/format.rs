@@ -1,12 +1,13 @@
+#[cfg(test)]
 use crate::core::lines_inclusive::LinesInclusiveExt;
 use crate::{
     config::Config,
     formatting::{
-        BreakOpportunity, LanguageFormatError, apply_text_edits, plan_spacing_edits, policy_for,
+        LanguageFormatError, apply_text_edits, plan_spacing_edits, policy_for,
         validate_break_opportunities,
     },
     language::Language,
-    line_break::{LineBreakPlanner, LineRelativeBreakOpportunity},
+    line_break::LineBreakPlanner,
 };
 
 /// An error produced while constructing or running a [`Formatter`].
@@ -67,75 +68,7 @@ impl Formatter {
             .map_err(FormatError::Language)?;
         validate_break_opportunities(&content, &mut opportunities)
             .map_err(FormatError::Language)?;
-        self.format_with_opportunities(&content, &opportunities)
-    }
-
-    fn format_with_opportunities(
-        &self,
-        content: &str,
-        opportunities: &[BreakOpportunity],
-    ) -> Result<String, FormatError> {
-        self.format_lines(content, |line_start, line| {
-            let content_end = line.find(['\r', '\n']).unwrap_or(line.len());
-            let line_end = line_start + content_end;
-            opportunities
-                .iter()
-                .filter(|opportunity| {
-                    opportunity.replace.start >= line_start && opportunity.replace.end <= line_end
-                })
-                .map(|opportunity| LineRelativeBreakOpportunity {
-                    replace: (opportunity.replace.start - line_start)
-                        ..(opportunity.replace.end - line_start),
-                    continuation: opportunity.continuation.clone(),
-                })
-                .collect::<Vec<_>>()
-        })
-    }
-
-    fn format_lines<F>(
-        &self,
-        content: &str,
-        mut opportunities_for_line: F,
-    ) -> Result<String, FormatError>
-    where
-        F: FnMut(usize, &str) -> Vec<LineRelativeBreakOpportunity>,
-    {
-        let mut formatted = String::with_capacity(content.len());
-        let mut source_offset = 0;
-        // An unterminated final line inherits the preceding physical line's
-        // terminator. A single-line document has no preceding terminator, so
-        // it uses LF as the default.
-        let mut previous_line_ending = "\n";
-        // Construct the whole result in memory so formatting failures cannot
-        // expose a partially transformed document to the caller.
-        for line in content.lines_inclusive() {
-            let (line_ending, is_terminated) = if line.ends_with("\r\n") {
-                ("\r\n", true)
-            } else if line.ends_with('\r') {
-                ("\r", true)
-            } else if line.ends_with('\n') {
-                ("\n", true)
-            } else {
-                (previous_line_ending, false)
-            };
-            if is_terminated {
-                previous_line_ending = line_ending;
-            }
-            let opportunities = opportunities_for_line(source_offset, line);
-            let breaks = self
-                .line_breaker
-                .plan_breaks(line, &opportunities, line_ending);
-            let mut cursor = 0;
-            for selected in breaks {
-                formatted.push_str(&line[cursor..selected.replace.start]);
-                formatted.push_str(&selected.line_ending);
-                formatted.push_str(&selected.continuation);
-                cursor = selected.replace.end;
-            }
-            formatted.push_str(&line[cursor..]);
-            source_offset += line.len();
-        }
-        Ok(formatted)
+        Ok(self.line_breaker.apply(&content, &opportunities))
     }
 }
 

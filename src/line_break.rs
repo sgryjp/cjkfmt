@@ -6,7 +6,10 @@ use unicode_linebreak::{BreakClass, break_property};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::{_log::test_log, config::AmbiguousWidth};
+use crate::{
+    _log::test_log, config::AmbiguousWidth, core::lines_inclusive::LinesInclusiveExt,
+    formatting::BreakOpportunity,
+};
 
 /// Grapheme clusters prohibited at the start of a line.
 pub const PROHIBITED_START: &str = ")]｝〕〉》」』】〙〗〟'\"｠»\
@@ -125,6 +128,60 @@ impl LineBreakPlanner {
             }
         }
         None
+    }
+
+    /// Applies validated document-relative break opportunities while preserving
+    /// existing physical line endings.
+    pub(crate) fn apply(&self, content: &str, opportunities: &[BreakOpportunity]) -> String {
+        let mut formatted = String::with_capacity(content.len());
+        let mut source_offset = 0;
+        // An unterminated final line inherits the preceding physical line's
+        // terminator. A single-line document has no preceding terminator, so
+        // it uses LF as the default.
+        let mut previous_line_ending = "\n";
+
+        for line in content.lines_inclusive() {
+            let (line_ending, is_terminated) = if line.ends_with("\r\n") {
+                ("\r\n", true)
+            } else if line.ends_with('\r') {
+                ("\r", true)
+            } else if line.ends_with('\n') {
+                ("\n", true)
+            } else {
+                (previous_line_ending, false)
+            };
+            if is_terminated {
+                previous_line_ending = line_ending;
+            }
+
+            let content_end = content_end(line);
+            let line_end = source_offset + content_end;
+            let line_opportunities = opportunities
+                .iter()
+                .filter(|opportunity| {
+                    opportunity.replace.start >= source_offset
+                        && opportunity.replace.end <= line_end
+                })
+                .map(|opportunity| LineRelativeBreakOpportunity {
+                    replace: (opportunity.replace.start - source_offset)
+                        ..(opportunity.replace.end - source_offset),
+                    continuation: opportunity.continuation.clone(),
+                })
+                .collect::<Vec<_>>();
+            let breaks = self.plan_breaks(line, &line_opportunities, line_ending);
+
+            let mut cursor = 0;
+            for selected in breaks {
+                formatted.push_str(&line[cursor..selected.replace.start]);
+                formatted.push_str(&selected.line_ending);
+                formatted.push_str(&selected.continuation);
+                cursor = selected.replace.end;
+            }
+            formatted.push_str(&line[cursor..]);
+            source_offset += line.len();
+        }
+
+        formatted
     }
 
     /// Selects safe breaks without mutating `line`.
@@ -473,6 +530,37 @@ mod tests {
 
         assert_eq!(selected[0].replace, 7..7);
         assert_eq!(planner.first_overflow("abcdef ああ"), Some(2));
+    }
+
+    #[test]
+    fn apply_preserves_source_relative_coordinates() {
+        let planner = planner(2);
+        let opportunities = [BreakOpportunity {
+            replace: 1..2,
+            continuation: "> ".to_string(),
+        }];
+
+        assert_eq!(planner.apply("a bc", &opportunities), "a\n> bc");
+    }
+
+    #[test]
+    fn apply_uses_preceding_crlf_for_wraps_in_unterminated_final_line() {
+        let planner = planner(3);
+        let opportunities = [
+            BreakOpportunity {
+                replace: 1..2,
+                continuation: String::new(),
+            },
+            BreakOpportunity {
+                replace: 8..9,
+                continuation: String::new(),
+            },
+        ];
+
+        assert_eq!(
+            planner.apply("a bcd\r\na bcd", &opportunities),
+            "a\r\nbcd\r\na\r\nbcd"
+        );
     }
 
     #[test]
