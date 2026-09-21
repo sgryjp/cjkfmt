@@ -24,7 +24,6 @@ use self::{json::JsonFormatPolicy, markdown::MarkdownFormatPolicy};
 /// This alias deliberately keeps policy code independent of the rest of the
 /// formatter configuration.  Width and line-breaking settings are not part
 /// of a policy's input.
-#[allow(dead_code)]
 pub(crate) type SpacingRules = SpacingConfig;
 
 /// A source-relative replacement planned by a language policy.
@@ -36,7 +35,6 @@ pub(crate) struct TextEdit {
 
 /// A syntax-approved place where the common line-break planner may split a
 /// physical source line.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BreakOpportunity {
     /// Document-relative range in the post-spacing source.
@@ -62,18 +60,15 @@ pub(crate) enum LanguageFormatError {
         range: Range<usize>,
     },
 
-    #[allow(dead_code)]
     #[error("{kind} range {range:?} crosses an existing physical line")]
     CrossesPhysicalLine {
         kind: &'static str,
         range: Range<usize>,
     },
 
-    #[allow(dead_code)]
     #[error("break opportunity range {range:?} contains non-horizontal whitespace")]
     InvalidBreakReplacement { range: Range<usize> },
 
-    #[allow(dead_code)]
     #[error("break opportunity continuation contains a line-ending sequence")]
     ContinuationContainsLineEnding,
 
@@ -84,7 +79,6 @@ pub(crate) enum LanguageFormatError {
         current: Range<usize>,
     },
 
-    #[allow(dead_code)]
     #[error("formatter policy failed: {0}")]
     Policy(String),
 }
@@ -138,7 +132,6 @@ pub(crate) fn validate_text_edits(
 }
 
 /// Validate and canonicalize document-relative break opportunities.
-#[allow(dead_code)]
 pub(crate) fn validate_break_opportunities(
     source: &str,
     opportunities: &mut [BreakOpportunity],
@@ -201,37 +194,6 @@ pub(crate) fn apply_text_edits(
         output.push_str(&source[cursor..edit.range.start]);
         output.push_str(&edit.replacement);
         cursor = edit.range.end;
-    }
-    output.push_str(&source[cursor..]);
-    Ok(output)
-}
-
-/// Apply selected break opportunities without exposing a partially built
-/// document.  The caller is responsible for selecting opportunities; this
-/// utility validates their source-relative structure before constructing the
-/// result.
-#[allow(dead_code)]
-pub(crate) fn apply_break_opportunities(
-    source: &str,
-    opportunities: &[BreakOpportunity],
-    line_ending: &str,
-) -> Result<String, LanguageFormatError> {
-    if !matches!(line_ending, "\n" | "\r" | "\r\n") {
-        return Err(LanguageFormatError::Policy(
-            "invalid inserted line ending".to_string(),
-        ));
-    }
-
-    let mut canonical = opportunities.to_vec();
-    validate_break_opportunities(source, &mut canonical)?;
-
-    let mut output = String::with_capacity(source.len());
-    let mut cursor = 0;
-    for opportunity in canonical {
-        output.push_str(&source[cursor..opportunity.replace.start]);
-        output.push_str(line_ending);
-        output.push_str(&opportunity.continuation);
-        cursor = opportunity.replace.end;
     }
     output.push_str(&source[cursor..]);
     Ok(output)
@@ -466,17 +428,5 @@ mod tests {
                 Err(LanguageFormatError::ContinuationContainsLineEnding),
             ));
         }
-    }
-
-    #[test]
-    fn applying_break_opportunities_preserves_source_relative_coordinates() {
-        let opportunities = [BreakOpportunity {
-            replace: 1..2,
-            continuation: "> ".to_string(),
-        }];
-        assert_eq!(
-            apply_break_opportunities("a bc", &opportunities, "\r\n").unwrap(),
-            "a\r\n> bc"
-        );
     }
 }
