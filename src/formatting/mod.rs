@@ -4,10 +4,6 @@
 //! orchestration layer from having to know whether a change came from a
 //! parser, while still rejecting plans that cannot be applied atomically.
 
-// The policy seam and break-plan helpers are introduced before their concrete
-// adapters and planner consumers in the migration sequence. The item-level
-// allowances below are limited to those staged, not-yet-reachable pieces.
-
 pub(crate) mod json;
 pub(crate) mod markdown;
 
@@ -253,7 +249,6 @@ fn validate_order<'a>(
     Ok(())
 }
 
-#[allow(dead_code)]
 fn is_one_physical_line(source: &str, range: &Range<usize>) -> bool {
     // A replace range must be contained in content, not in or across an
     // existing CR, LF, or CRLF separator.  Empty ranges at a content boundary
@@ -267,7 +262,6 @@ fn is_one_physical_line(source: &str, range: &Range<usize>) -> bool {
     start_line == end_line
 }
 
-#[allow(dead_code)]
 fn physical_line_containing(source: &str, offset: usize) -> Option<usize> {
     let mut line = 0;
     let mut cursor = 0;
@@ -298,17 +292,14 @@ fn physical_line_containing(source: &str, offset: usize) -> Option<usize> {
     None
 }
 
-#[allow(dead_code)]
 fn is_horizontal_whitespace(character: char) -> bool {
     character.is_whitespace() && !is_line_ending_character(character)
 }
 
-#[allow(dead_code)]
 fn contains_line_ending(text: &str) -> bool {
     text.chars().any(is_line_ending_character)
 }
 
-#[allow(dead_code)]
 fn is_line_ending_character(character: char) -> bool {
     matches!(
         character,
