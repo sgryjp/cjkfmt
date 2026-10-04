@@ -18,13 +18,12 @@ Try to do one pull request per change.
 
 ### Updating the changelog
 
-Update the changes you have made in
-[CHANGELOG](https://github.com/sgryjp/cjkfmt/blob/main/CHANGELOG.md)
-file under the **Unreleased** section.
+For each change that affects users, add a changelog entry to the **Unreleased**
+section of the [CHANGELOG](https://github.com/sgryjp/cjkfmt/blob/main/CHANGELOG.md).
+Changes that do not affect users do not need an entry.
 
-Add the changes of your pull request to one of the following subsections,
-depending on the types of changes defined by
-[Keep a changelog](https://keepachangelog.com/en/1.0.0/):
+Place each entry under the appropriate subsection, based on the change type,
+as defined by [Keep a changelog](https://keepachangelog.com/en/1.0.0/):
 
 - `Added` for new features.
 - `Changed` for changes in existing functionality.
