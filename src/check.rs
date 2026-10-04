@@ -20,10 +20,12 @@ pub(crate) fn check_one_file(
         .build()?;
 
     // Check line length problems
-    for (line_index, line) in document.content.lines_inclusive().enumerate() {
-        if let Some(diagnostic) = check_line_length(&breaker, document, line_index as u32, line) {
+    let mut line_start_offset = 0;
+    for line in document.content.lines_inclusive() {
+        if let Some(diagnostic) = check_line_length(&breaker, document, line_start_offset, line) {
             diagnostics.push(diagnostic);
         }
+        line_start_offset += line.len();
     }
 
     // Check spacing problems only when a language policy is available.
@@ -38,19 +40,18 @@ pub(crate) fn check_one_file(
 fn check_line_length(
     breaker: &LineBreakPlanner,
     document: &Document,
-    line_index: u32,
+    line_start_offset: usize,
     line: &str,
 ) -> Option<Diagnostic> {
     let overflow_pos = breaker.first_overflow(line)?;
-    let (precedings, followings) = line.split_at(overflow_pos);
-    let column_index = precedings.encode_utf16().fold(0u32, |acc, _| acc + 1);
-    let start = Position::new(line_index, column_index);
-    let next_char_len = followings
-        .graphemes(true)
-        .next()
-        .map(|s| s.encode_utf16().fold(0u32, |acc, _| acc + 1))
-        .unwrap_or(0u32);
-    let end = Position::new(line_index, column_index + next_char_len);
+    let overflow_offset = line_start_offset + overflow_pos;
+    let end_offset = overflow_offset
+        + line[overflow_pos..]
+            .graphemes(true)
+            .next()
+            .map_or(0, str::len);
+    let start = Position::from_offset(&document.content, overflow_offset);
+    let end = Position::from_offset(&document.content, end_offset);
     Some(Diagnostic::new(
         document.filename.as_deref(),
         start,

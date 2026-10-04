@@ -41,31 +41,24 @@ impl<'a> SpacingChecker<'a> {
 impl<'a> SpacingChecker<'a> {
     fn diagnostic_for_edit(&self, edit: &TextEdit) -> Diagnostic {
         let absolute_start = edit.range.start;
-        let absolute_end = edit.range.end;
-        let text_before = &self.document.content[..absolute_start];
-        let line_index = text_before.chars().filter(|&c| c == '\n').count() as u32;
-        let line_start = text_before.rfind('\n').map_or(0, |index| index + 1);
-        let column_index = utf16_len(&self.document.content[line_start..absolute_start]);
-
-        let end_column = if edit.range.is_empty() {
-            self.document.content[absolute_start..]
-                .graphemes(true)
-                .next()
-                .map_or(column_index, |grapheme| column_index + utf16_len(grapheme))
+        let start = Position::from_offset(&self.document.content, absolute_start);
+        let absolute_end = if edit.range.is_empty() {
+            absolute_start
+                + self.document.content[absolute_start..]
+                    .graphemes(true)
+                    .next()
+                    .map_or(0, str::len)
         } else {
-            column_index + utf16_len(&self.document.content[absolute_start..absolute_end])
+            edit.range.end
         };
+        let end = Position::from_offset(&self.document.content, absolute_end);
 
         Diagnostic::new(
             self.document.filename.as_deref(),
-            Position::new(line_index, column_index),
-            Position::new(line_index, end_column),
+            start,
+            end,
             "W002".to_string(),
             "Possible spacing position found".to_string(),
         )
     }
-}
-
-fn utf16_len(text: &str) -> u32 {
-    text.encode_utf16().count() as u32
 }
