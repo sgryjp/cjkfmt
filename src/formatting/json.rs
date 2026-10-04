@@ -22,22 +22,19 @@ impl LanguageFormatPolicy for JsonFormatPolicy {
         &self,
         source: &str,
     ) -> Result<Vec<BreakOpportunity>, LanguageFormatError> {
-        if serde_json::from_str::<serde_json::Value>(source).is_err()
-            || !has_only_known_json_nodes(source)
-        {
+        if serde_json::from_str::<serde_json::Value>(source).is_err() {
+            return Ok(Vec::new());
+        }
+        let Ok(tree) = parse(Grammar::Json, source) else {
+            return Ok(Vec::new());
+        };
+        let root = tree.root_node();
+        if root.has_error() || has_missing_or_unknown_node(root) {
             return Ok(Vec::new());
         }
 
-        Ok(json_token_seams(source))
+        Ok(json_token_seams(source, root))
     }
-}
-
-fn has_only_known_json_nodes(source: &str) -> bool {
-    let Ok(tree) = parse(Grammar::Json, source) else {
-        return false;
-    };
-    let root = tree.root_node();
-    !root.has_error() && !has_missing_or_unknown_node(root)
 }
 
 fn has_missing_or_unknown_node(node: tree_sitter::Node<'_>) -> bool {
@@ -71,123 +68,42 @@ fn has_missing_or_unknown_node(node: tree_sitter::Node<'_>) -> bool {
     node.children(&mut cursor).any(has_missing_or_unknown_node)
 }
 
-fn json_token_seams(source: &str) -> Vec<BreakOpportunity> {
-    let mut seams = Vec::new();
-    let mut cursor = 0;
-    let mut previous_end = None;
+const JSON_TOKEN_NODE_KINDS: &[&str] = &[
+    "string", "number", "true", "false", "null", "{", "}", "[", "]", ",", ":",
+];
 
-    while let Some((start, end)) = next_token(source, cursor) {
-        if let Some(previous_end) = previous_end {
-            let gap = previous_end..start;
-            if source[gap.clone()]
+fn json_token_seams(source: &str, root: tree_sitter::Node<'_>) -> Vec<BreakOpportunity> {
+    let mut tokens = Vec::new();
+    collect_json_token_ranges(root, &mut tokens);
+
+    tokens
+        .windows(2)
+        .filter_map(|pair| {
+            let gap = pair[0].end..pair[1].start;
+            source[gap.clone()]
                 .bytes()
                 .all(is_horizontal_json_whitespace)
-            {
-                seams.push(BreakOpportunity {
+                .then_some(BreakOpportunity {
                     replace: gap,
                     continuation: String::new(),
-                });
-            }
-        }
-        previous_end = Some(end);
-        cursor = end;
-    }
-
-    seams
+                })
+        })
+        .collect()
 }
 
-fn next_token(source: &str, mut cursor: usize) -> Option<(usize, usize)> {
-    while source
-        .as_bytes()
-        .get(cursor)
-        .is_some_and(|byte| byte.is_ascii_whitespace())
-    {
-        cursor += 1;
+fn collect_json_token_ranges(
+    node: tree_sitter::Node<'_>,
+    ranges: &mut Vec<std::ops::Range<usize>>,
+) {
+    if JSON_TOKEN_NODE_KINDS.contains(&node.kind()) {
+        ranges.push(node.byte_range());
+        return;
     }
-    let start = cursor;
-    let byte = *source.as_bytes().get(cursor)?;
-    let end = match byte {
-        b'{' | b'}' | b'[' | b']' | b',' | b':' => cursor + 1,
-        b'"' => string_end(source, cursor)?,
-        b'-' | b'0'..=b'9' => number_end(source, cursor)?,
-        b't' if source[cursor..].starts_with("true") => cursor + 4,
-        b'f' if source[cursor..].starts_with("false") => cursor + 5,
-        b'n' if source[cursor..].starts_with("null") => cursor + 4,
-        _ => return None,
-    };
-    Some((start, end))
-}
 
-fn string_end(source: &str, start: usize) -> Option<usize> {
-    let bytes = source.as_bytes();
-    let mut cursor = start + 1;
-    while let Some(&byte) = bytes.get(cursor) {
-        match byte {
-            b'"' => return Some(cursor + 1),
-            b'\\' => {
-                cursor += 1;
-                match *bytes.get(cursor)? {
-                    b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => cursor += 1,
-                    b'u' if bytes
-                        .get(cursor + 1..cursor + 5)?
-                        .iter()
-                        .all(u8::is_ascii_hexdigit) =>
-                    {
-                        cursor += 5;
-                    }
-                    _ => return None,
-                }
-            }
-            0x20..=0x7f => cursor += 1,
-            0x00..=0x1f => return None,
-            _ => {
-                let character = source[cursor..].chars().next()?;
-                cursor += character.len_utf8();
-            }
-        }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_json_token_ranges(child, ranges);
     }
-    None
-}
-
-fn number_end(source: &str, mut cursor: usize) -> Option<usize> {
-    let bytes = source.as_bytes();
-    if bytes.get(cursor) == Some(&b'-') {
-        cursor += 1;
-    }
-    match *bytes.get(cursor)? {
-        b'0' => cursor += 1,
-        b'1'..=b'9' => {
-            cursor += 1;
-            while bytes.get(cursor).is_some_and(u8::is_ascii_digit) {
-                cursor += 1;
-            }
-        }
-        _ => return None,
-    }
-    if bytes.get(cursor) == Some(&b'.') {
-        cursor += 1;
-        let fraction_start = cursor;
-        while bytes.get(cursor).is_some_and(u8::is_ascii_digit) {
-            cursor += 1;
-        }
-        if cursor == fraction_start {
-            return None;
-        }
-    }
-    if matches!(bytes.get(cursor), Some(b'e' | b'E')) {
-        cursor += 1;
-        if matches!(bytes.get(cursor), Some(b'+' | b'-')) {
-            cursor += 1;
-        }
-        let exponent_start = cursor;
-        while bytes.get(cursor).is_some_and(u8::is_ascii_digit) {
-            cursor += 1;
-        }
-        if cursor == exponent_start {
-            return None;
-        }
-    }
-    Some(cursor)
 }
 
 fn is_horizontal_json_whitespace(byte: u8) -> bool {
