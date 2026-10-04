@@ -7,7 +7,7 @@ use figment::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::args::CliArgs;
+use crate::cli::args::CliArgs;
 
 /// The configuration for cjkfmt.
 #[derive(Clone, Debug, Serialize, Deserialize)]
