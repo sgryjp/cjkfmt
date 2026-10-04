@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Corrected W002 spacing diagnostic positions after bare CR line endings; they could be wrong in
+  v0.0.8 and earlier.
+
 ## v0.0.8 - 2026-09-16
 
 ### Added
