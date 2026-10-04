@@ -102,6 +102,45 @@ mod tests {
     }
 
     #[test]
+    fn diagnostic_positions_are_consistent_across_physical_line_endings() {
+        let line_length_config = Config {
+            max_width: 2,
+            ..Config::default()
+        };
+        for line_ending in ["\n", "\r\n", "\r"] {
+            let source = format!("ab{line_ending}abc");
+            let document = Document::new(&source, None, None);
+            let diagnostics = check_one_file(&line_length_config, &document).unwrap();
+
+            assert_eq!(
+                diagnostics.len(),
+                1,
+                "unexpected diagnostics for {source:?}"
+            );
+            assert_eq!(diagnostics[0].code, "W001");
+            assert_eq!(diagnostics[0].start, Position::new(1, 2));
+            assert_eq!(diagnostics[0].end, Position::new(1, 3));
+        }
+
+        let mut spacing_config = Config::default();
+        spacing_config.spacing.alphabets = SpacingRule::Require;
+        for line_ending in ["\n", "\r\n", "\r"] {
+            let source = format!("# intro{line_ending}漢A");
+            let document = Document::new(&source, Some(Language::Markdown), None);
+            let diagnostics = check_one_file(&spacing_config, &document).unwrap();
+
+            assert_eq!(
+                diagnostics.len(),
+                1,
+                "unexpected diagnostics for {source:?}"
+            );
+            assert_eq!(diagnostics[0].code, "W002");
+            assert_eq!(diagnostics[0].start, Position::new(1, 1));
+            assert_eq!(diagnostics[0].end, Position::new(1, 2));
+        }
+    }
+
+    #[test]
     fn check_one_file_reports_spacing_columns_from_line_start() {
         let mut config = Config::default();
         config.spacing.digits = SpacingRule::Require;
