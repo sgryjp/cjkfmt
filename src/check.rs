@@ -2,20 +2,15 @@ use crate::core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, po
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    config::Config, document::Document, language::Language, line_break::LineBreakPlanner,
+    config::Config, document::Document, line_break::LineBreakPlanner,
     spacing_checker::SpacingChecker,
 };
 
 /// Checks a document using the language selected by the CLI.
-pub(crate) fn check_one_file_with_language(
+pub(crate) fn check_one_file(
     config: &Config,
     document: &Document,
-    language: Language,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
-    if crate::parser::grammar_for(language) != document.grammar {
-        anyhow::bail!("selected language does not match the document grammar")
-    }
-
     let mut diagnostics = Vec::new();
 
     // Initialize required components
@@ -31,28 +26,13 @@ pub(crate) fn check_one_file_with_language(
         }
     }
 
-    // Check spacing problems
-    let spacing_checker = SpacingChecker::new(config, document, language);
-    diagnostics.extend(spacing_checker.check()?);
+    // Check spacing problems only when a language policy is available.
+    if let Some(language) = document.language {
+        let spacing_checker = SpacingChecker::new(config, document, language);
+        diagnostics.extend(spacing_checker.check()?);
+    }
 
     Ok(diagnostics)
-}
-
-/// Checks a parser-backed document using the language corresponding to its
-/// grammar. CLI callers should retain the selected language explicitly.
-#[cfg(test)]
-pub(crate) fn check_one_file(
-    config: &Config,
-    document: &Document,
-) -> Result<Vec<Diagnostic>, anyhow::Error> {
-    let language = match document.grammar {
-        crate::parser::Grammar::Markdown => Language::Markdown,
-        crate::parser::Grammar::Json => Language::Json,
-        crate::parser::Grammar::MarkdownInline => {
-            anyhow::bail!("cannot check a document with the inline Markdown grammar")
-        }
-    };
-    check_one_file_with_language(config, document, language)
 }
 
 fn check_line_length(
@@ -82,16 +62,14 @@ fn check_line_length(
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::Grammar;
-
     use super::*;
-    use crate::config::SpacingRule;
+    use crate::{config::SpacingRule, language::Language};
 
     #[test]
     fn check_one_file_checks_unparsed_markdown_documents() {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Require;
-        let document = Document::new("漢A", Grammar::Markdown, None::<String>);
+        let document = Document::new("漢A", Some(Language::Markdown), None);
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
 
@@ -100,11 +78,34 @@ mod tests {
     }
 
     #[test]
+    fn check_without_a_selected_language_reports_line_length_but_skips_spacing() {
+        let config = Config {
+            max_width: 2,
+            spacing: crate::config::SpacingConfig {
+                alphabets: SpacingRule::Require,
+                ..crate::config::SpacingConfig::default()
+            },
+            ..Config::default()
+        };
+        let document = Document::new("漢A", None, None);
+
+        let diagnostics = check_one_file(&config, &document).unwrap();
+
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|item| item.code.as_str())
+                .collect::<Vec<_>>(),
+            ["W001"]
+        );
+    }
+
+    #[test]
     fn check_one_file_reports_spacing_columns_from_line_start() {
         let mut config = Config::default();
         config.spacing.digits = SpacingRule::Require;
 
-        let document = Document::new("# 漢1\n", Grammar::Markdown, Some("t.md"));
+        let document = Document::new("# 漢1\n", Some(Language::Markdown), Some("t.md".to_owned()));
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics.len(), 1);
@@ -118,7 +119,11 @@ mod tests {
         let mut config = Config::default();
         config.spacing.digits = SpacingRule::Require;
 
-        let document = Document::new("# 見出し\n\n# 漢1\n", Grammar::Markdown, Some("t.md"));
+        let document = Document::new(
+            "# 見出し\n\n# 漢1\n",
+            Some(Language::Markdown),
+            Some("t.md".to_owned()),
+        );
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics.len(), 1);
@@ -132,7 +137,11 @@ mod tests {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Prohibit;
 
-        let document = Document::new("# 漢 A\n", Grammar::Markdown, Some("t.md"));
+        let document = Document::new(
+            "# 漢 A\n",
+            Some(Language::Markdown),
+            Some("t.md".to_owned()),
+        );
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics.len(), 1);
@@ -152,7 +161,7 @@ mod tests {
             ("[漢A](destination)", 2),
             ("![漢A](image.png)", 3),
         ] {
-            let document = Document::new(source, Grammar::Markdown, Some("t.md"));
+            let document = Document::new(source, Some(Language::Markdown), Some("t.md".to_owned()));
             let diagnostics = check_one_file(&config, &document).expect("failed to check document");
             assert_eq!(
                 diagnostics.len(),
@@ -168,7 +177,7 @@ mod tests {
     fn check_one_file_reports_deletion_span_for_the_entire_ascii_space_run() {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Prohibit;
-        let document = Document::new("漢  A", Grammar::Markdown, Some("t.md"));
+        let document = Document::new("漢  A", Some(Language::Markdown), Some("t.md".to_owned()));
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert_eq!(diagnostics[0].start, Position::new(0, 1));
@@ -197,7 +206,11 @@ mod tests {
             // Keep an eligible pair outside the excluded construct so this test
             // proves the checker is selecting prose, rather than finding no pair.
             let source_with_prose = format!("{source}\n\n漢A");
-            let document = Document::new(&source_with_prose, Grammar::Markdown, Some("t.md"));
+            let document = Document::new(
+                &source_with_prose,
+                Some(Language::Markdown),
+                Some("t.md".to_owned()),
+            );
             let diagnostics = check_one_file(&config, &document)
                 .expect("failed to check document")
                 .into_iter()
@@ -218,7 +231,11 @@ mod tests {
     fn check_one_file_does_not_report_spacing_for_json_documents() {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Require;
-        let document = Document::new("{\"value\":\"漢A\"}", Grammar::Json, Some("t.json"));
+        let document = Document::new(
+            "{\"value\":\"漢A\"}",
+            Some(Language::Json),
+            Some("t.json".to_owned()),
+        );
 
         let diagnostics = check_one_file(&config, &document).expect("failed to check document");
         assert!(
@@ -233,7 +250,7 @@ mod tests {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Require;
         let source = "漢A and `漢A`";
-        let document = Document::new(source, Grammar::Markdown, Some("t.md"));
+        let document = Document::new(source, Some(Language::Markdown), Some("t.md".to_owned()));
 
         let diagnostics = check_one_file(&config, &document).unwrap();
         let formatted = crate::format::Formatter::new(&config)
@@ -256,7 +273,7 @@ mod tests {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Require;
         let source = r#"{"value":"漢A"}"#;
-        let document = Document::new(source, Grammar::Json, Some("t.json"));
+        let document = Document::new(source, Some(Language::Json), Some("t.json".to_owned()));
 
         let diagnostics = check_one_file(&config, &document).unwrap();
         let formatted = crate::format::Formatter::new(&config)
@@ -273,7 +290,7 @@ mod tests {
         let mut config = Config::default();
         config.spacing.alphabets = SpacingRule::Require;
         let source = r#"{"value":"漢A""#;
-        let document = Document::new(source, Grammar::Json, Some("t.json"));
+        let document = Document::new(source, Some(Language::Json), Some("t.json".to_owned()));
 
         let diagnostics = check_one_file(&config, &document).unwrap();
         let formatted = crate::format::Formatter::new(&config)
@@ -292,15 +309,19 @@ mod tests {
             ..Config::default()
         };
         for (source, grammar, filename) in [
-            ("`very-long-code-span`", Grammar::Markdown, "code.md"),
+            ("`very-long-code-span`", Some(Language::Markdown), "code.md"),
             (
                 "<https://example.test/very-long-url>",
-                Grammar::Markdown,
+                Some(Language::Markdown),
                 "url.md",
             ),
-            (r#""very long JSON string""#, Grammar::Json, "value.json"),
+            (
+                r#""very long JSON string""#,
+                Some(Language::Json),
+                "value.json",
+            ),
         ] {
-            let document = Document::new(source, grammar, Some(filename));
+            let document = Document::new(source, grammar, Some(filename.to_owned()));
             let diagnostics = check_one_file(&config, &document).unwrap();
 
             assert_eq!(

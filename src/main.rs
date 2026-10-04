@@ -66,7 +66,6 @@ mod file_based_tests {
 
     use crate::core::diagnostic::Diagnostic;
     use crate::core::position::Position;
-    use crate::parser::Grammar;
     use regex::Regex;
     use serde::Deserialize;
     use test_generator::test_resources;
@@ -93,10 +92,14 @@ mod file_based_tests {
             .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
         let test_case: CheckTestCase = serde_json::from_str(&content)
             .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-        // Use Markdown grammar because `input` is raw text content from the test
-        // case file; JSON grammar has no inline nodes and would not exercise the
+        // Use the Markdown language because `input` is raw text content from the
+        // test case file; JSON has no prose nodes and would not exercise the
         // spacing checker.
-        let document = Document::new(&test_case.input, Grammar::Markdown, Some(&resource));
+        let document = Document::new(
+            &test_case.input,
+            Some(crate::language::Language::Markdown),
+            Some(resource.clone()),
+        );
         let actual = check_one_file(&test_case.config, &document)
             .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
 

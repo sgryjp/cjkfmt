@@ -8,11 +8,13 @@ pub enum Grammar {
     MarkdownInline,
 }
 
-/// Convert the canonical language selection at the parser boundary.
-pub(crate) fn grammar_for(language: Language) -> Grammar {
-    match language {
-        Language::Json => Grammar::Json,
-        Language::Markdown => Grammar::Markdown,
+impl Language {
+    /// Resolve a user-facing language to the grammar used by the parser.
+    pub(crate) fn grammar(self) -> Grammar {
+        match self {
+            Self::Json => Grammar::Json,
+            Self::Markdown => Grammar::Markdown,
+        }
     }
 }
 
@@ -21,8 +23,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn converts_each_language_to_the_parser_grammar_used_at_the_boundary() {
-        assert_eq!(grammar_for(Language::Markdown), Grammar::Markdown);
-        assert_eq!(grammar_for(Language::Json), Grammar::Json);
+    fn each_user_facing_language_resolves_to_its_parser_grammar() {
+        assert_eq!(Language::Markdown.grammar(), Grammar::Markdown);
+        assert_eq!(Language::Json.grammar(), Grammar::Json);
     }
 }

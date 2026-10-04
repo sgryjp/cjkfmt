@@ -36,9 +36,7 @@ where
     if filenames.is_empty() {
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
-        let grammar = language
-            .map(crate::parser::grammar_for)
-            .unwrap_or(crate::parser::Grammar::Markdown);
+        let grammar = language.unwrap_or(Language::Markdown).grammar();
         write_tree(stdout, grammar, &content)?;
     } else {
         for filename in filenames {
@@ -50,7 +48,7 @@ where
                         filename.display()
                     )
                 })?;
-            let grammar: Grammar = crate::parser::grammar_for(language);
+            let grammar: Grammar = language.grammar();
             let content = fs::read_to_string(filename)?;
             write_tree(stdout, grammar, &content)?;
         }

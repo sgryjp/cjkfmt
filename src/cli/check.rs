@@ -7,8 +7,7 @@ use std::{
 use crate::language::Language;
 
 use crate::{
-    check::check_one_file_with_language, cli::utils::format_diagnostic, config::Config,
-    document::Document,
+    check::check_one_file, cli::utils::format_diagnostic, config::Config, document::Document,
 };
 
 pub fn check_command<W, P>(
@@ -43,9 +42,8 @@ where
         let mut content = String::with_capacity(1024);
         stdin.read_to_string(&mut content)?;
         let language = language.unwrap_or(Language::Markdown);
-        let grammar = crate::parser::grammar_for(language);
-        let document = Document::new(content, grammar, None::<String>);
-        diagnostics.extend(check_one_file_with_language(config, &document, language)?);
+        let document = Document::new(content, Some(language), None);
+        diagnostics.extend(check_one_file(config, &document)?);
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
@@ -56,14 +54,13 @@ where
                         filename.display()
                     )
                 })?;
-            let grammar = crate::parser::grammar_for(language);
             let content = fs::read_to_string(filename)?;
             let document = Document::new(
                 content,
-                grammar,
+                Some(language),
                 Some(filename.to_string_lossy().to_string()),
             );
-            diagnostics.extend(check_one_file_with_language(config, &document, language)?);
+            diagnostics.extend(check_one_file(config, &document)?);
         }
     }
     for diagnostic in diagnostics {
