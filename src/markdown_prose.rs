@@ -7,10 +7,8 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
     config::SpacingConfig,
-    formatting::{
-        BreakOpportunity, LanguageFormatError, TextEdit, validate_break_opportunities,
-        validate_text_edits,
-    },
+    core::physical_source::PhysicalSource,
+    formatting::{BreakOpportunity, LanguageFormatError, TextEdit, validate_text_edits},
     spacing::spacing_edits,
 };
 
@@ -42,6 +40,33 @@ const PROSE_CONTAINER_KINDS: &[&str] = &[
 const EMPHASIS_DELIMITER_KINDS: &[&str] = &["emphasis_delimiter"];
 const UNORDERED_LIST_MARKER_KINDS: &[&str] =
     &["list_marker_minus", "list_marker_plus", "list_marker_star"];
+
+struct MarkdownSourceSlice<'source, 'text> {
+    source: &'source PhysicalSource<'text>,
+    range: Range<usize>,
+}
+
+impl<'source, 'text> MarkdownSourceSlice<'source, 'text> {
+    fn new(source: &'source PhysicalSource<'text>, range: Range<usize>) -> Self {
+        Self { source, range }
+    }
+
+    fn text(&self) -> &'text str {
+        &self.source.text()[self.range.clone()]
+    }
+
+    fn line_content_end(&self, local_offset: usize) -> usize {
+        let slice_end = self.range.len();
+        self.source
+            .line_containing_content_offset(self.range.start + local_offset)
+            .map(|line| {
+                line.content_end_offset()
+                    .saturating_sub(self.range.start)
+                    .min(slice_end)
+            })
+            .unwrap_or(slice_end)
+    }
+}
 
 #[derive(Debug)]
 struct WrappingInlineRange {
@@ -156,11 +181,20 @@ pub(crate) fn plan_edits(
 ///
 /// This deliberately shares the same inline traversal used by wrapping.  The
 /// spacing engine remains syntax-agnostic; this module owns the CST filtering.
+#[cfg(test)]
 pub(crate) fn plan_spacing_edits(
     source: &str,
     rules: &SpacingConfig,
 ) -> Result<Vec<TextEdit>, LanguageFormatError> {
-    let block_tree = parse(Grammar::Markdown, source)
+    plan_spacing_edits_in(&PhysicalSource::new(source), rules)
+}
+
+pub(crate) fn plan_spacing_edits_in(
+    source: &PhysicalSource<'_>,
+    rules: &SpacingConfig,
+) -> Result<Vec<TextEdit>, LanguageFormatError> {
+    let text = source.text();
+    let block_tree = parse(Grammar::Markdown, text)
         .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
     let mut inline_ranges = Vec::new();
     collect_inline_ranges(block_tree.root_node(), &mut inline_ranges);
@@ -174,12 +208,13 @@ pub(crate) fn plan_spacing_edits(
         .collect::<Vec<_>>();
     let mut edits = Vec::new();
     for_each_safe_inline(
-        source,
+        text,
         inline_ranges,
         InlineSafety::Spacing,
         |inline_range, inline_source, inline_root| {
             let mut exclusions = Vec::new();
-            collect_spacing_protected_inline_ranges(inline_root, inline_source, &mut exclusions);
+            let source_slice = MarkdownSourceSlice::new(source, inline_range.range.clone());
+            collect_spacing_protected_inline_ranges(inline_root, &source_slice, &mut exclusions);
 
             for edit in spacing_edits(rules, inline_source) {
                 if !exclusions
@@ -197,7 +232,7 @@ pub(crate) fn plan_spacing_edits(
         },
     )?;
 
-    validate_text_edits(source, &mut edits)
+    validate_text_edits(text, &mut edits)
         .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
     Ok(edits)
 }
@@ -205,10 +240,18 @@ pub(crate) fn plan_spacing_edits(
 /// Plans conservative Markdown soft-break positions against the post-spacing
 /// source. Ordinary paragraphs, direct blockquotes, and top-level unordered
 /// list items are supported; all other block contexts remain ineligible.
+#[cfg(test)]
 pub(crate) fn plan_break_opportunities(
     source: &str,
 ) -> Result<Vec<BreakOpportunity>, LanguageFormatError> {
-    let block_tree = parse(Grammar::Markdown, source)
+    plan_break_opportunities_in(&PhysicalSource::new(source))
+}
+
+pub(crate) fn plan_break_opportunities_in(
+    source: &PhysicalSource<'_>,
+) -> Result<Vec<BreakOpportunity>, LanguageFormatError> {
+    let text = source.text();
+    let block_tree = parse(Grammar::Markdown, text)
         .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
     let root = block_tree.root_node();
     if root.has_error() || has_missing_node(root) || has_unknown_node(root, BLOCK_NODE_KINDS) {
@@ -216,10 +259,10 @@ pub(crate) fn plan_break_opportunities(
     }
 
     let mut inline_ranges = Vec::new();
-    collect_wrapping_inline_ranges(root, source, &mut inline_ranges);
+    collect_wrapping_inline_ranges(root, text, &mut inline_ranges);
     let mut opportunities = Vec::new();
     for_each_safe_inline(
-        source,
+        text,
         inline_ranges,
         InlineSafety::Wrapping,
         |inline_range, inline_source, inline_root| {
@@ -236,10 +279,12 @@ pub(crate) fn plan_break_opportunities(
                 return Ok(());
             }
             let mut protected_ranges = Vec::new();
-            collect_protected_inline_ranges(inline_root, inline_source, &mut protected_ranges);
+            let source_slice = MarkdownSourceSlice::new(source, inline_range.range.clone());
+            collect_protected_inline_ranges(inline_root, &source_slice, &mut protected_ranges);
             for range in prose_ranges {
                 for unprotected_range in subtract_ranges(range, &protected_ranges) {
                     collect_range_opportunities(
+                        text,
                         source,
                         inline_range.range.start + unprotected_range.start
                             ..inline_range.range.start + unprotected_range.end,
@@ -252,7 +297,6 @@ pub(crate) fn plan_break_opportunities(
         },
     )?;
 
-    validate_break_opportunities(source, &mut opportunities)?;
     Ok(opportunities)
 }
 
@@ -503,6 +547,7 @@ fn collect_prose_ranges(node: Node<'_>, ranges: &mut Vec<Range<usize>>) -> bool 
 
 fn collect_range_opportunities(
     source: &str,
+    physical_source: &PhysicalSource<'_>,
     range: Range<usize>,
     continuation: &str,
     opportunities: &mut Vec<BreakOpportunity>,
@@ -529,7 +574,7 @@ fn collect_range_opportunities(
                 end = relative + candidate.len();
                 following = seams.next();
             }
-            if is_safe_break_position(source, range.start, offset, end) {
+            if is_safe_break_position(source, physical_source, range.start, offset, end) {
                 opportunities.push(BreakOpportunity {
                     replace: offset..end,
                     continuation: continuation.to_owned(),
@@ -540,7 +585,7 @@ fn collect_range_opportunities(
             if !next_grapheme
                 .chars()
                 .all(is_replaceable_horizontal_whitespace)
-                && is_safe_break_position(source, range.start, next, next)
+                && is_safe_break_position(source, physical_source, range.start, next, next)
             {
                 opportunities.push(BreakOpportunity {
                     replace: next..next,
@@ -554,6 +599,7 @@ fn collect_range_opportunities(
 
 fn is_safe_break_position(
     source: &str,
+    physical_source: &PhysicalSource<'_>,
     prose_start: usize,
     break_start: usize,
     break_end: usize,
@@ -590,12 +636,17 @@ fn is_safe_break_position(
     // Looking only at `following` misses a delimiter at the end of the first
     // fragment: replacing its trailing whitespace with a newline can turn
     // that fragment into a thematic break or setext underline.
-    let line_start = source[..break_start]
-        .rfind(['\r', '\n'])
-        .map_or(0, |offset| offset + 1);
-    let line_end = source[break_end..]
-        .find(['\r', '\n'])
-        .map_or(source.len(), |offset| break_end + offset);
+    let Some(line) = physical_source.line_containing_content_offset(break_start) else {
+        return false;
+    };
+    let Some(end_line) = physical_source.line_containing_content_offset(break_end) else {
+        return false;
+    };
+    if line.index() != end_line.index() {
+        return false;
+    }
+    let line_start = line.start_offset();
+    let line_end = line.content_end_offset();
     if is_standalone_markdown_delimiter(&source[line_start..break_start]) {
         return false;
     }
@@ -714,7 +765,7 @@ fn is_safe_inline_tree(root: Node<'_>, source: &str) -> bool {
 
 fn collect_spacing_protected_inline_ranges(
     root: Node<'_>,
-    source: &str,
+    source: &MarkdownSourceSlice<'_, '_>,
     ranges: &mut Vec<Range<usize>>,
 ) {
     collect_exclusion_ranges(root, ranges);
@@ -726,7 +777,11 @@ fn collect_spacing_protected_inline_ranges(
     merge_ranges(ranges);
 }
 
-fn collect_protected_inline_ranges(root: Node<'_>, source: &str, ranges: &mut Vec<Range<usize>>) {
+fn collect_protected_inline_ranges(
+    root: Node<'_>,
+    source: &MarkdownSourceSlice<'_, '_>,
+    ranges: &mut Vec<Range<usize>>,
+) {
     collect_exclusion_ranges(root, ranges);
     collect_unrecognized_autolink_ranges(root, source, ranges, true, false);
     collect_unrecognized_html_block_ranges(root, source, ranges);
@@ -735,18 +790,17 @@ fn collect_protected_inline_ranges(root: Node<'_>, source: &str, ranges: &mut Ve
 
 fn collect_unrecognized_html_block_ranges(
     root: Node<'_>,
-    source: &str,
+    source: &MarkdownSourceSlice<'_, '_>,
     ranges: &mut Vec<Range<usize>>,
 ) {
+    let text = source.text();
     let mut search_start = 0;
-    while let Some(relative_start) = source[search_start..].find('<') {
+    while let Some(relative_start) = text[search_start..].find('<') {
         let start = search_start + relative_start;
-        if is_potential_html_block_start(&source[start..])
+        if is_potential_html_block_start(&text[start..])
             && !has_exclusion_covering(root, start..start + 1)
         {
-            let end = source[start..]
-                .find(['\r', '\n'])
-                .map_or(source.len(), |relative_end| start + relative_end);
+            let end = source.line_content_end(start);
             ranges.push(start..end);
         }
         search_start = start + 1;
@@ -787,22 +841,21 @@ fn is_potential_html_block_start(source: &str) -> bool {
 
 fn collect_unrecognized_autolink_ranges(
     root: Node<'_>,
-    source: &str,
+    source: &MarkdownSourceSlice<'_, '_>,
     ranges: &mut Vec<Range<usize>>,
     protect_unclosed: bool,
     search_across_lines: bool,
 ) {
+    let text = source.text();
     let mut search_start = 0;
-    while let Some(relative_start) = source[search_start..].find('<') {
+    while let Some(relative_start) = text[search_start..].find('<') {
         let start = search_start + relative_start;
         let search_end = if search_across_lines {
-            source.len()
+            text.len()
         } else {
-            source[start..]
-                .find(['\r', '\n'])
-                .map_or(source.len(), |offset| start + offset)
+            source.line_content_end(start)
         };
-        let suffix = &source[start + 1..search_end];
+        let suffix = &text[start + 1..search_end];
         let Some(close_offset) = suffix.find('>') else {
             // Once a URI/email-shaped candidate has no closing delimiter, the
             // grammar cannot tell where its malformed construct ends. Protect
@@ -818,7 +871,7 @@ fn collect_unrecognized_autolink_ranges(
             continue;
         };
         let end = start + 1 + close_offset + 1;
-        let candidate = &source[start..end];
+        let candidate = &text[start..end];
         if is_autolink_candidate(&candidate[1..candidate.len() - 1])
             && !has_exclusion_covering(root, start..end)
         {

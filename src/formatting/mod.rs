@@ -11,7 +11,7 @@ use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{config::SpacingConfig, language::Language};
+use crate::{config::SpacingConfig, core::physical_source::PhysicalSource, language::Language};
 
 use self::{json::JsonFormatPolicy, markdown::MarkdownFormatPolicy};
 
@@ -83,13 +83,13 @@ pub(crate) enum LanguageFormatError {
 pub(crate) trait LanguageFormatPolicy {
     fn plan_spacing_edits(
         &self,
-        source: &str,
+        source: &PhysicalSource<'_>,
         rules: &SpacingRules,
     ) -> Result<Vec<TextEdit>, LanguageFormatError>;
 
     fn plan_break_opportunities(
         &self,
-        source: &str,
+        source: &PhysicalSource<'_>,
     ) -> Result<Vec<BreakOpportunity>, LanguageFormatError>;
 }
 
@@ -107,11 +107,11 @@ pub(crate) fn policy_for(language: Language) -> &'static dyn LanguageFormatPolic
 /// source receive the policy's same fail-closed treatment in either workflow.
 pub(crate) fn plan_spacing_edits(
     language: Language,
-    source: &str,
+    source: &PhysicalSource<'_>,
     rules: &SpacingRules,
 ) -> Result<Vec<TextEdit>, LanguageFormatError> {
     let mut edits = policy_for(language).plan_spacing_edits(source, rules)?;
-    validate_text_edits(source, &mut edits)?;
+    validate_text_edits(source.text(), &mut edits)?;
     Ok(edits)
 }
 
@@ -128,19 +128,28 @@ pub(crate) fn validate_text_edits(
 }
 
 /// Validate and canonicalize document-relative break opportunities.
+#[cfg(test)]
 pub(crate) fn validate_break_opportunities(
     source: &str,
     opportunities: &mut [BreakOpportunity],
 ) -> Result<(), LanguageFormatError> {
+    validate_break_opportunities_in(&PhysicalSource::new(source), opportunities)
+}
+
+pub(crate) fn validate_break_opportunities_in(
+    source: &PhysicalSource<'_>,
+    opportunities: &mut [BreakOpportunity],
+) -> Result<(), LanguageFormatError> {
+    let text = source.text();
     for opportunity in opportunities.iter() {
         let range = &opportunity.replace;
         // Check physical source content before grapheme validation so a
         // character boundary inside CRLF (for example, byte 2 in `a\r\nb`)
         // cannot be mistaken for a valid insertion point.
         if range.start <= range.end
-            && range.end <= source.len()
-            && source.is_char_boundary(range.start)
-            && source.is_char_boundary(range.end)
+            && range.end <= text.len()
+            && text.is_char_boundary(range.start)
+            && text.is_char_boundary(range.end)
             && !is_one_physical_line(source, range)
         {
             return Err(LanguageFormatError::CrossesPhysicalLine {
@@ -148,9 +157,9 @@ pub(crate) fn validate_break_opportunities(
                 range: range.clone(),
             });
         }
-        validate_range(source, "break opportunity", range)?;
+        validate_range(text, "break opportunity", range)?;
         if !opportunity.replace.is_empty()
-            && !source[opportunity.replace.clone()]
+            && !text[opportunity.replace.clone()]
                 .chars()
                 .all(is_horizontal_whitespace)
         {
@@ -249,47 +258,16 @@ fn validate_order<'a>(
     Ok(())
 }
 
-fn is_one_physical_line(source: &str, range: &Range<usize>) -> bool {
-    // A replace range must be contained in content, not in or across an
-    // existing CR, LF, or CRLF separator.  Empty ranges at a content boundary
-    // are valid and are what policies use for adjacent-token seams.
-    let Some(start_line) = physical_line_containing(source, range.start) else {
+fn is_one_physical_line(source: &PhysicalSource<'_>, range: &Range<usize>) -> bool {
+    // Empty ranges at a content boundary are valid and are used for
+    // adjacent-token seams. Terminator interiors and cross-line ranges are not.
+    let Some(start_line) = source.line_containing_content_offset(range.start) else {
         return false;
     };
-    let Some(end_line) = physical_line_containing(source, range.end) else {
+    let Some(end_line) = source.line_containing_content_offset(range.end) else {
         return false;
     };
-    start_line == end_line
-}
-
-fn physical_line_containing(source: &str, offset: usize) -> Option<usize> {
-    let mut line = 0;
-    let mut cursor = 0;
-    while cursor <= source.len() {
-        let remaining = &source[cursor..];
-        let next_ending = remaining
-            .find(['\r', '\n'])
-            .map(|relative| cursor + relative);
-        let content_end = next_ending.unwrap_or(source.len());
-        if offset <= content_end {
-            return Some(line);
-        }
-        let ending_start = content_end;
-        if ending_start == source.len() {
-            return None;
-        }
-        let ending_length = if source[ending_start..].starts_with("\r\n") {
-            2
-        } else {
-            1
-        };
-        if offset < ending_start + ending_length {
-            return None;
-        }
-        cursor = ending_start + ending_length;
-        line += 1;
-    }
-    None
+    start_line.index() == end_line.index()
 }
 
 fn is_horizontal_whitespace(character: char) -> bool {

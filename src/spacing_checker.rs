@@ -1,4 +1,4 @@
-use crate::core::{diagnostic::Diagnostic, position::Position};
+use crate::core::{diagnostic::Diagnostic, physical_source::PhysicalSource};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
@@ -28,30 +28,30 @@ impl<'a> SpacingChecker<'a> {
     }
 
     /// Plans spacing edits and converts them to diagnostics.
-    pub fn check(&self) -> anyhow::Result<Vec<Diagnostic>> {
-        let edits =
-            plan_spacing_edits(self.language, &self.document.content, &self.config.spacing)?;
+    pub fn check(&self, source: &PhysicalSource<'_>) -> anyhow::Result<Vec<Diagnostic>> {
+        let edits = plan_spacing_edits(self.language, source, &self.config.spacing)?;
         Ok(edits
             .iter()
-            .map(|edit| self.diagnostic_for_edit(edit))
+            .map(|edit| self.diagnostic_for_edit(source, edit))
             .collect())
     }
 }
 
 impl<'a> SpacingChecker<'a> {
-    fn diagnostic_for_edit(&self, edit: &TextEdit) -> Diagnostic {
+    fn diagnostic_for_edit(&self, source: &PhysicalSource<'_>, edit: &TextEdit) -> Diagnostic {
+        let text = source.text();
         let absolute_start = edit.range.start;
-        let start = Position::from_offset(&self.document.content, absolute_start);
+        let start = source.position(absolute_start);
         let absolute_end = if edit.range.is_empty() {
             absolute_start
-                + self.document.content[absolute_start..]
+                + text[absolute_start..]
                     .graphemes(true)
                     .next()
                     .map_or(0, str::len)
         } else {
             edit.range.end
         };
-        let end = Position::from_offset(&self.document.content, absolute_end);
+        let end = source.position(absolute_end);
 
         Diagnostic::new(
             self.document.filename.as_deref(),

@@ -7,7 +7,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    _log::test_log, config::AmbiguousWidth, core::lines_inclusive::LinesInclusiveExt,
+    _log::test_log, config::AmbiguousWidth, core::physical_source::PhysicalSource,
     formatting::BreakOpportunity,
 };
 
@@ -116,12 +116,10 @@ impl LineBreakPlanner {
     }
 
     /// Returns the first grapheme whose addition exceeds the configured width.
-    /// Existing physical line endings are not measured as source content.
-    pub(crate) fn first_overflow(&self, line: &str) -> Option<usize> {
-        test_log!("first_overflow() {:?}", line);
-        let content_end = content_end(line);
+    pub(crate) fn first_overflow(&self, line_content: &str) -> Option<usize> {
+        test_log!("first_overflow() {:?}", line_content);
         let mut width = 0;
-        for (offset, grapheme) in line[..content_end].grapheme_indices(true) {
+        for (offset, grapheme) in line_content.grapheme_indices(true) {
             width += self.grapheme_width(grapheme);
             if width > self.max_width {
                 return Some(offset);
@@ -132,53 +130,54 @@ impl LineBreakPlanner {
 
     /// Applies validated document-relative break opportunities while preserving
     /// existing physical line endings.
-    pub(crate) fn apply(&self, content: &str, opportunities: &[BreakOpportunity]) -> String {
-        let mut formatted = String::with_capacity(content.len());
-        let mut source_offset = 0;
+    pub(crate) fn apply(
+        &self,
+        source: &PhysicalSource<'_>,
+        opportunities: &[BreakOpportunity],
+    ) -> String {
+        let mut formatted = String::with_capacity(source.text().len());
         // An unterminated final line inherits the preceding physical line's
         // terminator. A single-line document has no preceding terminator, so
         // it uses LF as the default.
         let mut previous_line_ending = "\n";
 
-        for line in content.lines_inclusive() {
-            let (line_ending, is_terminated) = if line.ends_with("\r\n") {
-                ("\r\n", true)
-            } else if line.ends_with('\r') {
-                ("\r", true)
-            } else if line.ends_with('\n') {
-                ("\n", true)
+        let mut next_opportunity = 0;
+        for line in source.lines() {
+            let line_ending = line.terminator();
+            let inserted_line_ending = if line_ending.is_empty() {
+                previous_line_ending
             } else {
-                (previous_line_ending, false)
-            };
-            if is_terminated {
                 previous_line_ending = line_ending;
+                line_ending
+            };
+            let line_end = line.content_end_offset();
+            let first_opportunity = next_opportunity;
+            while opportunities
+                .get(next_opportunity)
+                .is_some_and(|opportunity| opportunity.replace.start <= line_end)
+            {
+                next_opportunity += 1;
             }
-
-            let content_end = content_end(line);
-            let line_end = source_offset + content_end;
-            let line_opportunities = opportunities
+            let line_opportunities = opportunities[first_opportunity..next_opportunity]
                 .iter()
-                .filter(|opportunity| {
-                    opportunity.replace.start >= source_offset
-                        && opportunity.replace.end <= line_end
-                })
                 .map(|opportunity| LineRelativeBreakOpportunity {
-                    replace: (opportunity.replace.start - source_offset)
-                        ..(opportunity.replace.end - source_offset),
+                    replace: (opportunity.replace.start - line.start_offset())
+                        ..(opportunity.replace.end - line.start_offset()),
                     continuation: opportunity.continuation.clone(),
                 })
                 .collect::<Vec<_>>();
-            let breaks = self.plan_breaks(line, &line_opportunities, line_ending);
+            let line_content = line.content();
+            let breaks = self.plan_breaks(line_content, &line_opportunities, inserted_line_ending);
 
             let mut cursor = 0;
             for selected in breaks {
-                formatted.push_str(&line[cursor..selected.replace.start]);
+                formatted.push_str(&line_content[cursor..selected.replace.start]);
                 formatted.push_str(&selected.line_ending);
                 formatted.push_str(&selected.continuation);
                 cursor = selected.replace.end;
             }
-            formatted.push_str(&line[cursor..]);
-            source_offset += line.len();
+            formatted.push_str(&line_content[cursor..]);
+            formatted.push_str(line_ending);
         }
 
         formatted
@@ -196,7 +195,7 @@ impl LineBreakPlanner {
         opportunities: &[LineRelativeBreakOpportunity],
         inserted_line_ending: &str,
     ) -> Vec<SelectedBreak> {
-        let end = content_end(line);
+        let end = line.len();
         let mut cursor = 0;
         let mut candidate_index = 0;
         let mut continuation = String::new();
@@ -344,10 +343,6 @@ impl LineBreakPlanner {
     }
 }
 
-fn content_end(line: &str) -> usize {
-    line.find(['\r', '\n']).unwrap_or(line.len())
-}
-
 /// Check whether a line break is allowed between the given grapheme clusters.
 /// This function is based on UAX #14 so kinsoku rules are not considered.
 fn is_breakable(preceding: &str, following: &str) -> bool {
@@ -446,6 +441,14 @@ mod tests {
             .unwrap()
     }
 
+    fn apply(
+        planner: &LineBreakPlanner,
+        content: &str,
+        opportunities: &[BreakOpportunity],
+    ) -> String {
+        planner.apply(&PhysicalSource::new(content), opportunities)
+    }
+
     fn opportunity(start: usize, end: usize, continuation: &str) -> LineRelativeBreakOpportunity {
         LineRelativeBreakOpportunity {
             replace: start..end,
@@ -476,7 +479,7 @@ mod tests {
 
     #[test]
     fn first_overflow_reports_physical_overflow_without_needing_a_safe_break() {
-        assert_eq!(planner(2).first_overflow("abcde あ\n"), Some(2));
+        assert_eq!(planner(2).first_overflow("abcde あ"), Some(2));
     }
 
     #[test]
@@ -540,7 +543,7 @@ mod tests {
             continuation: "> ".to_string(),
         }];
 
-        assert_eq!(planner.apply("a bc", &opportunities), "a\n> bc");
+        assert_eq!(apply(&planner, "a bc", &opportunities), "a\n> bc");
     }
 
     #[test]
@@ -558,7 +561,7 @@ mod tests {
         ];
 
         assert_eq!(
-            planner.apply("a bcd\r\na bcd", &opportunities),
+            apply(&planner, "a bcd\r\na bcd", &opportunities),
             "a\r\nbcd\r\na\r\nbcd"
         );
     }
@@ -649,7 +652,10 @@ mod tests {
     }
 
     #[test]
-    fn line_endings_are_not_considered_breakable_content() {
-        assert_eq!(planner(2).first_overflow("あ\r\n"), None);
+    fn first_overflow_measures_physical_line_content_without_its_terminator() {
+        let source = PhysicalSource::new("あ\r\n");
+        let line = source.lines().next().unwrap();
+
+        assert_eq!(planner(2).first_overflow(line.content()), None);
     }
 }
