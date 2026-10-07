@@ -1,4 +1,9 @@
-use crate::core::{diagnostic::Diagnostic, lines_inclusive::LinesInclusiveExt, position::Position};
+#[cfg(test)]
+use crate::core::position::Position;
+use crate::core::{
+    diagnostic::Diagnostic,
+    physical_source::{PhysicalLine, PhysicalSource},
+};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
@@ -19,19 +24,19 @@ pub(crate) fn check_one_file(
         .max_width(config.max_width)
         .build()?;
 
+    let source = PhysicalSource::new(&document.content);
+
     // Check line length problems
-    let mut line_start_offset = 0;
-    for line in document.content.lines_inclusive() {
-        if let Some(diagnostic) = check_line_length(&breaker, document, line_start_offset, line) {
+    for line in source.lines() {
+        if let Some(diagnostic) = check_line_length(&breaker, document, &source, line) {
             diagnostics.push(diagnostic);
         }
-        line_start_offset += line.len();
     }
 
     // Check spacing problems only when a language policy is available.
     if let Some(language) = document.language {
         let spacing_checker = SpacingChecker::new(config, document, language);
-        diagnostics.extend(spacing_checker.check()?);
+        diagnostics.extend(spacing_checker.check(&source)?);
     }
 
     Ok(diagnostics)
@@ -40,18 +45,19 @@ pub(crate) fn check_one_file(
 fn check_line_length(
     breaker: &LineBreakPlanner,
     document: &Document,
-    line_start_offset: usize,
-    line: &str,
+    source: &PhysicalSource<'_>,
+    line: PhysicalLine<'_>,
 ) -> Option<Diagnostic> {
-    let overflow_pos = breaker.first_overflow(line)?;
-    let overflow_offset = line_start_offset + overflow_pos;
+    let line_content = line.content();
+    let overflow_pos = breaker.first_overflow(line_content)?;
+    let overflow_offset = line.start_offset() + overflow_pos;
     let end_offset = overflow_offset
-        + line[overflow_pos..]
+        + line_content[overflow_pos..]
             .graphemes(true)
             .next()
             .map_or(0, str::len);
-    let start = Position::from_offset(&document.content, overflow_offset);
-    let end = Position::from_offset(&document.content, end_offset);
+    let start = source.position(overflow_offset);
+    let end = source.position(end_offset);
     Some(Diagnostic::new(
         document.filename.as_deref(),
         start,
@@ -137,6 +143,131 @@ mod tests {
             assert_eq!(diagnostics[0].code, "W002");
             assert_eq!(diagnostics[0].start, Position::new(1, 1));
             assert_eq!(diagnostics[0].end, Position::new(1, 2));
+        }
+    }
+
+    #[test]
+    fn checking_and_formatting_share_physical_interpretation_for_mixed_endings() {
+        let config = Config {
+            max_width: 3,
+            spacing: crate::config::SpacingConfig {
+                alphabets: SpacingRule::Require,
+                ..crate::config::SpacingConfig::default()
+            },
+            ..Config::default()
+        };
+        let source = "漢A xx\r\n漢A yy\r漢A zz\n漢A qq";
+        let document = Document::new(source, Some(Language::Markdown), Some("shared.md".into()));
+        let diagnostics = check_one_file(&config, &document).unwrap();
+
+        let ranges = diagnostics
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic.code.as_str(),
+                    diagnostic.start.clone(),
+                    diagnostic.end.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ranges,
+            [
+                ("W001", Position::new(0, 2), Position::new(0, 3)),
+                ("W001", Position::new(1, 2), Position::new(1, 3)),
+                ("W001", Position::new(2, 2), Position::new(2, 3)),
+                ("W001", Position::new(3, 2), Position::new(3, 3)),
+                ("W002", Position::new(0, 1), Position::new(0, 2)),
+                ("W002", Position::new(1, 1), Position::new(1, 2)),
+                ("W002", Position::new(2, 1), Position::new(2, 2)),
+                ("W002", Position::new(3, 1), Position::new(3, 2)),
+            ]
+        );
+        assert!(diagnostics.iter().all(|diagnostic| {
+            diagnostic.filename.as_deref() == Some("shared.md")
+                && diagnostic.message
+                    == if diagnostic.code == "W001" {
+                        "Line length exceeds 3 characters"
+                    } else {
+                        "Possible spacing position found"
+                    }
+        }));
+
+        let formatted = crate::format::Formatter::new(&config)
+            .unwrap()
+            .format(Some(Language::Markdown), source)
+            .unwrap();
+        assert_eq!(
+            formatted,
+            "漢\r\nA\r\nxx\r\n漢\rA\ryy\r漢\nA\nzz\n漢\nA\nqq"
+        );
+    }
+
+    #[test]
+    fn checking_and_formatting_match_the_shared_source_behavior_corpus() {
+        let config = Config {
+            max_width: 3,
+            spacing: crate::config::SpacingConfig {
+                alphabets: SpacingRule::Require,
+                ..crate::config::SpacingConfig::default()
+            },
+            ..Config::default()
+        };
+        type ExpectedRange = (&'static str, Position, Position);
+        type CorpusCase = (&'static str, Vec<ExpectedRange>, &'static str);
+
+        let cases: &[CorpusCase] = &[
+            ("", vec![], ""),
+            ("\r\n\n\r", vec![], "\r\n\n\r"),
+            (
+                "ab cd",
+                vec![("W001", Position::new(0, 3), Position::new(0, 4))],
+                "ab\ncd",
+            ),
+            (
+                "😀Axx",
+                vec![("W001", Position::new(0, 3), Position::new(0, 4))],
+                "😀\nAxx",
+            ),
+            (
+                "e\u{301}漢A",
+                vec![
+                    ("W001", Position::new(0, 3), Position::new(0, 4)),
+                    ("W002", Position::new(0, 2), Position::new(0, 3)),
+                    ("W002", Position::new(0, 3), Position::new(0, 4)),
+                ],
+                "e\u{301}\n漢\nA",
+            ),
+            (
+                "👩‍👩 bbbb",
+                vec![("W001", Position::new(0, 6), Position::new(0, 7))],
+                "👩‍👩\nbbbb",
+            ),
+        ];
+
+        for (source, expected_ranges, expected_output) in cases {
+            let document = Document::new(*source, Some(Language::Markdown), None);
+            let diagnostics = check_one_file(&config, &document).unwrap();
+            let actual_ranges = diagnostics
+                .iter()
+                .map(|diagnostic| {
+                    (
+                        diagnostic.code.as_str(),
+                        diagnostic.start.clone(),
+                        diagnostic.end.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                actual_ranges, *expected_ranges,
+                "wrong diagnostics for {source:?}"
+            );
+
+            let formatted = crate::format::Formatter::new(&config)
+                .unwrap()
+                .format(Some(Language::Markdown), source)
+                .unwrap();
+            assert_eq!(formatted, *expected_output, "wrong output for {source:?}");
         }
     }
 

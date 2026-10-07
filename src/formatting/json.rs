@@ -1,7 +1,10 @@
 //! The built-in JSON formatting policy.
 
 use super::{BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, SpacingRules, TextEdit};
-use crate::parser::{Grammar, parse};
+use crate::{
+    core::physical_source::PhysicalSource,
+    parser::{Grammar, parse},
+};
 
 /// Plans JSON token-seam wrapping without assigning JSON layout preferences.
 #[derive(Debug, Default, Clone, Copy)]
@@ -10,7 +13,7 @@ pub(crate) struct JsonFormatPolicy;
 impl LanguageFormatPolicy for JsonFormatPolicy {
     fn plan_spacing_edits(
         &self,
-        _source: &str,
+        _source: &PhysicalSource<'_>,
         _rules: &SpacingRules,
     ) -> Result<Vec<TextEdit>, LanguageFormatError> {
         // JSON whitespace is syntax, not Markdown prose, so CJK spacing rules
@@ -20,12 +23,13 @@ impl LanguageFormatPolicy for JsonFormatPolicy {
 
     fn plan_break_opportunities(
         &self,
-        source: &str,
+        source: &PhysicalSource<'_>,
     ) -> Result<Vec<BreakOpportunity>, LanguageFormatError> {
-        if serde_json::from_str::<serde_json::Value>(source).is_err() {
+        let text = source.text();
+        if serde_json::from_str::<serde_json::Value>(text).is_err() {
             return Ok(Vec::new());
         }
-        let Ok(tree) = parse(Grammar::Json, source) else {
+        let Ok(tree) = parse(Grammar::Json, text) else {
             return Ok(Vec::new());
         };
         let root = tree.root_node();
@@ -33,7 +37,7 @@ impl LanguageFormatPolicy for JsonFormatPolicy {
             return Ok(Vec::new());
         }
 
-        Ok(json_token_seams(source, root))
+        Ok(json_token_seams(text, root))
     }
 }
 
@@ -118,7 +122,8 @@ mod tests {
     fn plans_each_legal_seam_between_json_tokens() {
         let policy = JsonFormatPolicy;
         let source = r#"{"key" : [true, false, null, -12.34]}"#;
-        let seams = policy.plan_break_opportunities(source).unwrap();
+        let source_index = PhysicalSource::new(source);
+        let seams = policy.plan_break_opportunities(&source_index).unwrap();
 
         assert_eq!(
             seams
@@ -147,19 +152,22 @@ mod tests {
         let policy = JsonFormatPolicy;
         assert!(
             policy
-                .plan_spacing_edits(r#"{"key":"value""#, &SpacingRules::default())
+                .plan_spacing_edits(
+                    &PhysicalSource::new(r#"{"key":"value""#),
+                    &SpacingRules::default(),
+                )
                 .unwrap()
                 .is_empty()
         );
         assert!(
             policy
-                .plan_break_opportunities(r#"{"key":"value""#)
+                .plan_break_opportunities(&PhysicalSource::new(r#"{"key":"value""#))
                 .unwrap()
                 .is_empty()
         );
         assert!(
             policy
-                .plan_break_opportunities(r#""first" "second""#)
+                .plan_break_opportunities(&PhysicalSource::new(r#""first" "second""#))
                 .unwrap()
                 .is_empty()
         );

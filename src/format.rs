@@ -1,10 +1,9 @@
-#[cfg(test)]
-use crate::core::lines_inclusive::LinesInclusiveExt;
 use crate::{
     config::Config,
+    core::physical_source::PhysicalSource,
     formatting::{
         LanguageFormatError, apply_text_edits, plan_spacing_edits, policy_for,
-        validate_break_opportunities,
+        validate_break_opportunities_in,
     },
     language::Language,
     line_break::LineBreakPlanner,
@@ -60,15 +59,17 @@ impl Formatter {
         language: Language,
         source: &str,
     ) -> Result<String, FormatError> {
-        let edits = plan_spacing_edits(language, source, &self.config.spacing)
+        let source = PhysicalSource::new(source);
+        let edits = plan_spacing_edits(language, &source, &self.config.spacing)
             .map_err(FormatError::Language)?;
-        let content = apply_text_edits(source, &edits).map_err(FormatError::Language)?;
+        let content = apply_text_edits(source.text(), &edits).map_err(FormatError::Language)?;
+        let content_source = PhysicalSource::new(&content);
         let mut opportunities = policy_for(language)
-            .plan_break_opportunities(&content)
+            .plan_break_opportunities(&content_source)
             .map_err(FormatError::Language)?;
-        validate_break_opportunities(&content, &mut opportunities)
+        validate_break_opportunities_in(&content_source, &mut opportunities)
             .map_err(FormatError::Language)?;
-        Ok(self.line_breaker.apply(&content, &opportunities))
+        Ok(self.line_breaker.apply(&content_source, &opportunities))
     }
 }
 
@@ -167,6 +168,29 @@ mod tests {
             format(Some(crate::language::Language::Markdown), "漢A\n"),
             "漢 A\n"
         );
+    }
+
+    #[test]
+    fn format_plans_wraps_against_the_post_spacing_source() {
+        for (rule, source, expected) in [
+            (SpacingRule::Require, "漢A one two", "漢 A one\ntwo"),
+            (SpacingRule::Prohibit, "漢  A one two", "漢A one\ntwo"),
+        ] {
+            let mut config = config();
+            config.max_width = 8;
+            config.spacing.alphabets = rule;
+            let formatter = Formatter::new(&config).unwrap();
+            let formatted = formatter.format(Some(Language::Markdown), source).unwrap();
+
+            assert_eq!(formatted, expected, "unexpected output for {source:?}");
+            assert_eq!(
+                formatter
+                    .format(Some(Language::Markdown), &formatted)
+                    .unwrap(),
+                formatted,
+                "formatting was not idempotent after spacing changed source offsets"
+            );
+        }
     }
 
     #[test]
@@ -972,19 +996,10 @@ mod tests {
     }
 
     fn line_terminators(source: &str) -> Vec<&str> {
-        source
-            .lines_inclusive()
-            .filter_map(|line| {
-                if line.ends_with("\r\n") {
-                    Some("\r\n")
-                } else if line.ends_with('\r') {
-                    Some("\r")
-                } else if line.ends_with('\n') {
-                    Some("\n")
-                } else {
-                    None
-                }
-            })
+        PhysicalSource::new(source)
+            .lines()
+            .map(|line| line.terminator())
+            .filter(|terminator| !terminator.is_empty())
             .collect()
     }
 
