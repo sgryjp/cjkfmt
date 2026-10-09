@@ -2,9 +2,14 @@
 name: Feature request
 about: Suggest an idea for this project
 title: ""
-labels: enhancement
+labels: "enhancement, needs-triage"
 assignees: ""
 ---
+
+<!--
+Before reporting, please search existing issues for related keywords:
+https://github.com/sgryjp/cjkfmt/issues?q=is%3Aissue
+-->
 
 ## Problem / use case
 

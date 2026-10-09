@@ -2,9 +2,14 @@
 name: Bug report
 about: Create a report to help us improve
 title: ""
-labels: bug
+labels: "bug, needs-triage"
 assignees: ""
 ---
+
+<!--
+Before reporting, please search existing issues for related keywords:
+https://github.com/sgryjp/cjkfmt/issues?q=is%3Aissue
+-->
 
 ## Bug description
 
