@@ -19,7 +19,11 @@ Steps to reproduce the behavior:
 3. ...
 4. ...
 
-<!-- Make sure you are able to reproduce the bug in the main branch, too. -->
+<!--
+If possible, check whether the bug also occurs in the latest release.
+If you tested the main branch, include the commit ID.
+You can report the bug even if you have not performed these checks.
+-->
 
 ## Expected behavior
 
