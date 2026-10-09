@@ -9,20 +9,37 @@ assignees: ""
 <!--
 Before reporting, please search existing issues for related keywords:
 https://github.com/sgryjp/cjkfmt/issues?q=is%3Aissue
+
+Remove confidential information from examples, configuration, and logs,
+but preserve the characters, spaces, and line breaks needed to reproduce the bug.
 -->
 
 ## Bug description
 
-<!-- A clear and concise description of what the bug is. -->
+<!-- Describe what is going wrong and how it affects your work. -->
 
-## To Reproduce
+## Minimal input
 
-Steps to reproduce the behavior:
+<!--
+If the bug involves processing text, provide the smallest input that reproduces it.
+Paste the original text in a fenced code block rather than a screenshot.
+Preserve spaces and line breaks; do not paste only the rendered Markdown.
+If trailing spaces or line endings matter, also attach the original file.
 
-1. ...
-2. ...
-3. ...
-4. ...
+If you cannot provide an input example, explain why.
+-->
+
+## Command and reproduction steps
+
+<!--
+Paste the exact command in a fenced code block, including all options.
+State whether the input comes from a file or stdin.
+For file input, include the filename or its extension.
+For stdin, make clear whether you used --language.
+
+Include any other steps needed to reproduce the problem.
+If reproduction is unreliable, describe what you tried and how often it occurs.
+-->
 
 <!--
 If possible, check whether the bug also occurs in the latest release.
@@ -30,21 +47,41 @@ If you tested the main branch, include the commit ID.
 You can report the bug even if you have not performed these checks.
 -->
 
-## Expected behavior
+## Actual result
 
-<!-- A clear and concise description of what you expected to happen. -->
+<!--
+Paste the actual output and any error messages in fenced code blocks.
+Include the exit code if it is relevant.
+For formatting problems, include the resulting text, not just a description.
+-->
 
-## Screenshots
+## Expected result
 
-<!-- If applicable, add screenshots to help explain your problem. -->
+<!--
+Describe what you expected to happen.
+For formatting problems, include the expected text in a fenced code block.
+-->
+
+## Configuration
+
+<!--
+Include any relevant .cjkfmt.json settings and CJKFMT_ environment variables.
+For configuration files, state their location relative to the working directory,
+or whether they are in the user's configuration directory.
+If you are not using a configuration file or CJKFMT_ variables, say so.
+-->
 
 ## Environment
 
-<!-- Please fill the following information. -->
+<!-- Paste the output of cjkfmt --version rather than guessing the version. -->
 
-- OS: [e.g. Ubuntu 20.04]
-- cjkfmt version: [e.g. 0.1.0]
+- OS and version:
+- cjkfmt version:
+- Commit ID (if tested on main):
 
-## Additional context
+## Additional context (optional)
 
-<!-- Add any other context about the problem here. -->
+<!--
+Add any other useful information, such as whether an earlier version worked.
+Screenshots can help explain display problems, but should supplement the original text.
+-->
