@@ -6,20 +6,32 @@ labels: enhancement
 assignees: ""
 ---
 
-## Motivations
+## Problem / use case
 
 <!--
-If your feature request is related to a problem, please describe it.
+Describe the task or input you are having trouble with and how it affects your work.
 -->
 
-## Solution
+## Desired outcome
 
-<!-- Describe the solution you'd like. -->
+<!--
+Describe the behavior or result that would solve the problem, without prescribing an implementation.
+For formatting-rule requests, include sample input and the desired output.
+-->
 
-## Alternatives
+## Proposed solution (optional)
 
-<!-- Describe any alternative solutions or features you've considered. -->
+<!--
+If you have a solution in mind, describe it here.
+You can submit a feature request without proposing an implementation.
+-->
 
-## Additional context
+## Alternatives / workarounds (optional)
+
+<!--
+Describe any alternatives or workarounds you have tried or considered and their limitations.
+-->
+
+## Additional context (optional)
 
 <!-- Add any other context or screenshots about the feature request here. -->
