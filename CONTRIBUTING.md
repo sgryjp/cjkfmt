@@ -114,4 +114,36 @@ Make sure you have [Node.js](https://nodejs.org/) installed so `npx` is availabl
   npx --yes markdownlint-cli2 "**/*.md"
   ```
 
+### Document-based check tests
+
+Each check test case lives in its own directory under `test_cases/check/`:
+
+```text
+test_cases/check/<case>/
+├── case.json
+└── input.md
+```
+
+`case.json` must contain `input_file`, `config`, and `diagnostics`. Use an empty array
+when the case expects no diagnostics. The optional `language` field accepts `markdown`
+or `json`; it overrides language detection from the input file extension. Without it,
+`.md`/`.markdown` and `.json` select their matching Language. An unsupported or missing
+extension is an error.
+
+Diagnostic positions use zero-based line numbers and zero-based UTF-16 code-unit columns.
+The end position is exclusive. Keep the expected diagnostics in their actual order.
+
+Input files are read as UTF-8 without trimming whitespace or changing line endings. Do
+not add or remove a final newline unless it is part of the test input. Fixture-specific
+editor and Git settings preserve these bytes. Markdown fixture files are excluded from
+Markdown lint because they may intentionally contain lint violations.
+
+To add a case, create its directory, add `case.json`, and save the input document as a
+separate file referenced by `input_file`. Keep that file within the case directory. Run
+all check and unit tests with:
+
+```shell
+cargo test --all-features
+```
+
 [markdownlint-cli2]: https://github.com/DavidAnson/markdownlint-cli2

@@ -23,7 +23,6 @@ unicode-width = { version = "0.2.2", features = ["cjk"] }
 yansi = { version = "1.0.1", features = ["detect-env", "detect-tty"] }
 
 [dev-dependencies]
-regex = "1.12.3"
 rstest = "0.27.0"
 test-generator = "0.3.1"
 tempfile = "3.23.0"

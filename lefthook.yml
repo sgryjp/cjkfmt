@@ -24,5 +24,5 @@ pre-push:
       run: cargo clippy --all-targets --all-features -- -D warnings
     test:
       tags: test
-      glob: "*.rs"
+      glob: "{*.rs,test_cases/check/**/*.json,test_cases/check/**/*.md}"
       run: cargo test --all-features

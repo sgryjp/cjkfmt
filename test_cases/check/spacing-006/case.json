@@ -1,15 +1,20 @@
 {
+  "input_file": "input.md",
   "config": {
     "spacing": {
       "digits": "require"
     }
   },
-  "input": "漢1",
   "diagnostics": [
     {
-      "filename": "test_cases/check/spacing-002.json",
-      "start": { "line": 0, "column": 1 },
-      "end": { "line": 0, "column": 2 },
+      "start": {
+        "line": 2,
+        "column": 3
+      },
+      "end": {
+        "line": 2,
+        "column": 4
+      },
       "code": "W002",
       "message": "Possible spacing position found"
     }
