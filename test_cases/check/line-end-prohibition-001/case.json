@@ -1,7 +1,7 @@
 {
+  "input_file": "input.md",
   "config": {
     "max_width": 6
   },
-  "input": "あ「い",
   "diagnostics": []
 }

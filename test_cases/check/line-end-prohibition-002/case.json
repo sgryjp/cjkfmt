@@ -1,0 +1,20 @@
+{
+  "input_file": "input.md",
+  "config": {
+    "max_width": 5
+  },
+  "diagnostics": [
+    {
+      "start": {
+        "line": 0,
+        "column": 2
+      },
+      "end": {
+        "line": 0,
+        "column": 3
+      },
+      "code": "W001",
+      "message": "Line length exceeds 5 characters"
+    }
+  ]
+}

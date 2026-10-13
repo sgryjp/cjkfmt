@@ -17,3 +17,8 @@ indent_size = 2
 [*.md]
 # Non standard but effective for Neovim and VSCode
 max_line_length = 100
+
+[test_cases/check/**]
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

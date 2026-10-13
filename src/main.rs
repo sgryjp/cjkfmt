@@ -13,6 +13,9 @@ mod parser;
 mod spacing;
 mod spacing_checker;
 
+#[cfg(test)]
+mod check_test_case;
+
 use std::io::stdout;
 
 use anyhow::Context;
@@ -62,88 +65,55 @@ fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod file_based_tests {
-    use super::*;
+    use std::path::Path;
 
     use crate::core::diagnostic::Diagnostic;
-    use crate::core::position::Position;
-    use regex::Regex;
-    use serde::Deserialize;
     use test_generator::test_resources;
 
     use crate::_log::test_log;
     use crate::check::check_one_file;
+    use crate::check_test_case::load_check_test_case;
     use crate::cli::utils::format_diagnostic;
-    use crate::document::Document;
 
-    #[derive(Default, Debug, Deserialize)]
-    struct CheckTestCase {
-        config: Config,
-        input: String,
-        diagnostics: Vec<Diagnostic>,
-    }
-
-    #[test_resources("test_cases/check/*.json")]
+    #[test_resources("test_cases/check/*/case.json")]
     fn check(resource: &str) {
-        // Normalize path separators so tests work on both Unix-like and Windows systems
-        let resource = resource.replace('\\', "/");
-
-        // Load the test case from the JSON file
-        let content = std::fs::read_to_string(&resource)
-            .unwrap_or_else(|_| panic!("failed to read resource: {resource:?}"));
-        let test_case: CheckTestCase = serde_json::from_str(&content)
-            .unwrap_or_else(|_| panic!("failed to parse resource: {resource:?}"));
-        // Use the Markdown language because `input` is raw text content from the
-        // test case file; JSON has no prose nodes and would not exercise the
-        // spacing checker.
-        let document = Document::new(
-            &test_case.input,
-            Some(crate::language::Language::Markdown),
-            Some(resource.clone()),
+        let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let test_case = load_check_test_case(Path::new(resource), repository_root)
+            .unwrap_or_else(|error| panic!("{error:#}"));
+        let input_path = repository_root.join(
+            test_case
+                .document
+                .filename
+                .as_deref()
+                .expect("file-based test documents have filenames"),
         );
-        let actual = check_one_file(&test_case.config, &document)
-            .unwrap_or_else(|_| panic!("failed on checking a file: {resource:?}"));
+        let input_bytes_before = std::fs::read(&input_path).unwrap_or_else(|error| {
+            panic!("failed to read input {}: {error}", input_path.display())
+        });
+        assert_eq!(input_bytes_before, test_case.document.content.as_bytes());
 
-        // Find the offset of the original input text in the test data
-        let matched_input = Regex::new(r##""input"\s*:\s*"(.*)""##)
-            .unwrap()
-            .captures(&content)
-            .unwrap_or_else(|| panic!("`input` field not found in the test data file: {resource}"))
-            .get(1)
-            .unwrap();
-        let lines_preceding: Vec<(usize, &str)> = content[..matched_input.start()]
-            .match_indices("\n")
-            .collect();
-        let line_number_offset = lines_preceding.len();
-        let (line_start_offset, _) = lines_preceding.last().expect("no preceding lines found");
-        let column_number_offset = matched_input.start() - (line_start_offset + 1);
+        let actual = check_one_file(&test_case.config, &test_case.document)
+            .unwrap_or_else(|error| panic!("failed to check case {resource:?}: {error:#}"));
 
-        // Print the diagnostics with adjusted line and column numbers
+        assert_eq!(
+            std::fs::read(&input_path).expect("check tests should not remove their input files"),
+            input_bytes_before,
+            "check tests must not modify input files"
+        );
+
         for (i, diagnostic) in actual.iter().enumerate() {
-            let diagnostic = Diagnostic::new(
-                diagnostic.filename.clone(),
-                Position {
-                    line: diagnostic.start.line + line_number_offset as u32,
-                    column: diagnostic.start.column + column_number_offset as u32,
-                },
-                Position {
-                    line: diagnostic.end.line + line_number_offset as u32,
-                    column: diagnostic.end.column + column_number_offset as u32,
-                },
-                diagnostic.code.clone(),
-                diagnostic.message.clone(),
-            );
-            let formatted = format_diagnostic(&diagnostic);
+            let formatted = format_diagnostic(diagnostic);
             test_log!("diagnostics[{i:2}] = {formatted}");
         }
         assert_eq!(
             actual.len(),
             test_case.diagnostics.len(),
-            "diagnostic count mismatch"
+            "diagnostic count mismatch for {resource}"
         );
         actual
             .iter()
             .zip(&test_case.diagnostics)
-            .for_each(|(a, e)| assert_diagnostics_are_equal(a, e));
+            .for_each(|(actual, expected)| assert_diagnostics_are_equal(actual, expected));
     }
 
     fn assert_diagnostics_are_equal(a: &Diagnostic, b: &Diagnostic) {
