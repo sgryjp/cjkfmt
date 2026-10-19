@@ -19,6 +19,9 @@ pub struct Config {
     /// Maximum line width to allow. (default: 80)
     pub max_width: u32,
 
+    /// Whether to preserve physical lines or split them to fit the maximum width.
+    pub line_wrapping: LineWrapping,
+
     /// Rules for handling spaces between full-width and half-width characters.
     pub spacing: SpacingConfig,
 }
@@ -58,9 +61,21 @@ impl Default for Config {
         Config {
             ambiguous_width: AmbiguousWidth::Wide,
             max_width: 80,
+            line_wrapping: LineWrapping::Split,
             spacing: Default::default(),
         }
     }
+}
+
+/// Whether formatting preserves physical lines or splits them to fit the maximum width.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+pub enum LineWrapping {
+    /// Preserve existing physical lines.
+    Preserve,
+
+    /// Split lines at safe opportunities to fit the maximum width.
+    Split,
 }
 
 /// Rules for handling spaces between full-width and half-width characters.
@@ -133,13 +148,21 @@ mod tests {
     // Re-implements `Config::from_cli_args`'s merge chain rather than calling it, since
     // that function touches real files and env vars. Keep the two in sync manually.
     fn configuration_sources_are_applied_in_default_file_env_cli_order() {
-        let args = parse_args(["cjkfmt", "--spacing-digits", "ignore", "format"]);
+        let args = parse_args([
+            "cjkfmt",
+            "--spacing-digits",
+            "ignore",
+            "--line-wrapping",
+            "split",
+            "format",
+        ]);
         // Stands in for the env layer's position in the chain; not real `Env::prefixed` parsing.
         let environment = json!({
             "spacing": {
                 "alphabets": "prohibit",
                 "digits": "prohibit",
             },
+            "line_wrapping": "preserve",
         });
         let config: Config = Figment::new()
             .merge(Serialized::defaults(Config::default()))
@@ -147,6 +170,7 @@ mod tests {
                 r#"{
                     "max_width": 90,
                     "ambiguous_width": "narrow",
+                    "line_wrapping": "preserve",
                     "spacing": { "alphabets": "require", "digits": "require" }
                 }"#,
             ))
@@ -162,6 +186,11 @@ mod tests {
             "the file should override the default"
         );
         assert_eq!(
+            config.line_wrapping,
+            LineWrapping::Split,
+            "the CLI should override the environment and file"
+        );
+        assert_eq!(
             config.spacing.alphabets,
             SpacingRule::Prohibit,
             "the environment should override the file"
@@ -171,6 +200,53 @@ mod tests {
             SpacingRule::Ignore,
             "the CLI should override the environment"
         );
+    }
+
+    #[test]
+    fn line_wrapping_defaults_to_split_when_omitted_from_existing_configuration() {
+        let config: Config = serde_json::from_str(r#"{ "max_width": 42 }"#)
+            .expect("configuration without line_wrapping should deserialize");
+
+        assert_eq!(config.line_wrapping, LineWrapping::Split);
+        assert_eq!(config.max_width, 42);
+    }
+
+    #[rstest]
+    #[case(LineWrapping::Preserve, r#""preserve""#)]
+    #[case(LineWrapping::Split, r#""split""#)]
+    fn line_wrapping_serializes_to_canonical_json_strings(
+        #[case] mode: LineWrapping,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(serde_json::to_string(&mode).unwrap(), expected);
+    }
+
+    #[rstest]
+    // "snake_case" is the documented, canonical form (ADR-0001).
+    #[case("preserve", Some(LineWrapping::Preserve))]
+    #[case("split", Some(LineWrapping::Split))]
+    #[case("Preserve", None)]
+    #[case("Split", None)]
+    #[case("wrap", None)]
+    fn line_wrapping_accepts_only_snake_case_values(
+        #[case] value: &str,
+        #[case] expected: Option<LineWrapping>,
+    ) {
+        let result: Result<Config, _> =
+            serde_json::from_str(&format!(r#"{{ "line_wrapping": "{value}" }}"#));
+
+        match expected {
+            Some(expected) => assert_eq!(
+                result
+                    .expect("the documented snake_case value should deserialize")
+                    .line_wrapping,
+                expected
+            ),
+            None => assert!(
+                result.is_err(),
+                "unknown line-wrapping value should be rejected"
+            ),
+        }
     }
 
     #[rstest]

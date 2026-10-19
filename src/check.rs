@@ -70,7 +70,10 @@ fn check_line_length(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::SpacingRule, language::Language};
+    use crate::{
+        config::{LineWrapping, SpacingRule},
+        language::Language,
+    };
 
     #[test]
     fn check_one_file_checks_unparsed_markdown_documents() {
@@ -471,6 +474,132 @@ mod tests {
 
         assert_eq!(formatted, source);
         assert!(diagnostics.iter().all(|item| item.code != "W002"));
+    }
+
+    #[test]
+    fn check_diagnostics_are_identical_in_preserve_and_split_modes() {
+        let source = "漢A `very-long-code-span`";
+        let document = Document::new(
+            source,
+            Some(Language::Markdown),
+            Some("protected.md".to_owned()),
+        );
+        let expected = [
+            Diagnostic::new(
+                Some("protected.md"),
+                Position::new(0, 4),
+                Position::new(0, 5),
+                "W001".to_owned(),
+                "Line length exceeds 5 characters".to_owned(),
+            ),
+            Diagnostic::new(
+                Some("protected.md"),
+                Position::new(0, 1),
+                Position::new(0, 2),
+                "W002".to_owned(),
+                "Possible spacing position found".to_owned(),
+            ),
+        ];
+
+        for line_wrapping in [LineWrapping::Preserve, LineWrapping::Split] {
+            let config = Config {
+                max_width: 5,
+                line_wrapping,
+                spacing: crate::config::SpacingConfig {
+                    alphabets: SpacingRule::Require,
+                    ..crate::config::SpacingConfig::default()
+                },
+                ..Config::default()
+            };
+
+            assert_eq!(check_one_file(&config, &document).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn check_reports_w001_for_protected_markdown_and_json_in_both_modes() {
+        let cases = [
+            (
+                "`very-long-code-span`",
+                Language::Markdown,
+                "protected.md",
+                Position::new(0, 5),
+                Position::new(0, 6),
+            ),
+            (
+                "\"very long JSON string\"",
+                Language::Json,
+                "protected.json",
+                Position::new(0, 5),
+                Position::new(0, 6),
+            ),
+        ];
+
+        for (source, language, filename, start, end) in cases {
+            let document = Document::new(source, Some(language), Some(filename.to_owned()));
+            let expected = [Diagnostic::new(
+                Some(filename),
+                start,
+                end,
+                "W001".to_owned(),
+                "Line length exceeds 5 characters".to_owned(),
+            )];
+            for line_wrapping in [LineWrapping::Preserve, LineWrapping::Split] {
+                let config = Config {
+                    max_width: 5,
+                    line_wrapping,
+                    ..Config::default()
+                };
+                assert_eq!(check_one_file(&config, &document).unwrap(), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn preserve_spacing_can_create_w001_without_causing_format_failure() {
+        let config = Config {
+            max_width: 3,
+            line_wrapping: LineWrapping::Preserve,
+            spacing: crate::config::SpacingConfig {
+                alphabets: SpacingRule::Require,
+                ..crate::config::SpacingConfig::default()
+            },
+            ..Config::default()
+        };
+        let document = Document::new("漢A", Some(Language::Markdown), None);
+
+        let original_diagnostics = check_one_file(&config, &document).unwrap();
+        let formatted = crate::format::Formatter::new(&config)
+            .unwrap()
+            .format(Some(Language::Markdown), &document.content)
+            .unwrap();
+        let formatted_diagnostics = check_one_file(
+            &config,
+            &Document::new(&formatted, Some(Language::Markdown), None),
+        )
+        .unwrap();
+
+        assert_eq!(formatted, "漢 A");
+        assert_eq!(
+            original_diagnostics,
+            [Diagnostic::new(
+                None::<String>,
+                Position::new(0, 1),
+                Position::new(0, 2),
+                "W002".to_owned(),
+                "Possible spacing position found".to_owned(),
+            )]
+        );
+        assert_eq!(
+            formatted_diagnostics,
+            [Diagnostic::new(
+                None::<String>,
+                Position::new(0, 2),
+                Position::new(0, 3),
+                "W001".to_owned(),
+                "Line length exceeds 3 characters".to_owned(),
+            )]
+        );
     }
 
     #[test]

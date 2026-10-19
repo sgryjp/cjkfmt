@@ -7,7 +7,7 @@ use figment::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::config::{AmbiguousWidth, SpacingRule};
+use crate::config::{AmbiguousWidth, LineWrapping, SpacingRule};
 
 use crate::language::Language;
 
@@ -39,6 +39,10 @@ pub struct CliArgs {
     #[arg(long, value_enum)]
     pub ambiguous_width: Option<AmbiguousWidth>,
 
+    /// Preserve physical lines or split them to fit the maximum width. [default: split]
+    #[arg(long, value_enum)]
+    pub line_wrapping: Option<LineWrapping>,
+
     /// Require, prohibit, or ignore spaces between full-width and half-width alphabets. [default: ignore]
     #[arg(long, value_enum)]
     pub spacing_alphabets: Option<SpacingRule>,
@@ -66,6 +70,12 @@ impl Provider for CliArgs {
             dict.insert(
                 "ambiguous_width".to_string(),
                 Value::serialize(ambiguous_width)?,
+            );
+        }
+        if let Some(line_wrapping) = self.line_wrapping {
+            dict.insert(
+                "line_wrapping".to_string(),
+                Value::serialize(line_wrapping)?,
             );
         }
 
@@ -135,7 +145,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::config::Config;
+    use crate::config::{Config, LineWrapping};
 
     fn config_from(arguments: impl IntoIterator<Item = &'static str>) -> Config {
         let args =
@@ -239,6 +249,40 @@ mod tests {
             Language::explicit_or_inferred_path(None, Path::new("document.txt")),
             None
         );
+    }
+
+    #[test]
+    fn line_wrapping_flag_is_absent_from_cli_provider_when_not_specified() {
+        let args = CliArgs::try_parse_from(["cjkfmt", "format"])
+            .expect("command without line-wrapping option should parse");
+
+        assert_eq!(args.line_wrapping, None);
+        assert_eq!(
+            Figment::new()
+                .merge(Serialized::defaults(Config::default()))
+                .merge(&args)
+                .extract::<Config>()
+                .unwrap()
+                .line_wrapping,
+            LineWrapping::Split
+        );
+    }
+
+    #[rstest]
+    #[case("preserve", LineWrapping::Preserve)]
+    #[case("split", LineWrapping::Split)]
+    fn line_wrapping_flag_maps_each_clap_value_to_config(
+        #[case] value: &'static str,
+        #[case] expected: LineWrapping,
+    ) {
+        let config = config_from(["cjkfmt", "--line-wrapping", value, "format"]);
+
+        assert_eq!(config.line_wrapping, expected);
+    }
+
+    #[test]
+    fn line_wrapping_flag_rejects_unknown_values() {
+        assert!(CliArgs::try_parse_from(["cjkfmt", "--line-wrapping", "wrap", "format"]).is_err());
     }
 
     #[test]
