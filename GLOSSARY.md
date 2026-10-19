@@ -15,9 +15,13 @@ The user-facing kind of input document selected with `--language`. The supported
 values are lowercase `markdown` and `json`; an explicit selection takes precedence over
 filename-based detection. Formatting preserves the input language rather than converting it to
 another language.
-JSON selection disables Markdown-prose spacing edits, but retains cjkfmt's existing general
-line-wrapping pass.
+JSON selection disables Markdown-prose spacing; line splitting follows the configured policy.
 _Avoid_: Grammar, parser
+
+**Line wrapping**:
+The policy for preserving existing physical lines or splitting them to fit the configured maximum
+width.
+_Avoid_: Reflow
 
 **Markdown prose**:
 Visible Markdown content eligible for CJK/ASCII spacing rules, including ordinary text, emphasis,
