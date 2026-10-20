@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v0.0.9 - 2026-10-20
+
 ### Added
 
 - Added `--line-wrapping preserve|split` to control whether formatting preserves physical lines
