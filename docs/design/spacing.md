@@ -1,5 +1,5 @@
 ---
-created: 2028-08-16
+created: 2026-08-16
 ---
 
 # CJK/ASCII Spacing Specification
