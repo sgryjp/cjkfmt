@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added `--line-wrapping preserve|split` to control whether formatting preserves physical lines
+  or inserts safe line breaks. The default remains `split`. (#128)
+
 ### Fixed
 
 - Corrected W002 spacing diagnostic positions after bare CR line endings; they could be wrong in

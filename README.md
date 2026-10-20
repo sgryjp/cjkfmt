@@ -26,14 +26,38 @@ Omitting `--write` leaves the source files unchanged and sends formatted content
 ### Language Selection
 
 Named files are classified by their final extension: `.md` and `.markdown` select Markdown, and
-`.json` selects JSON. Matching is case-insensitive for ASCII letters. Other named paths require an
-explicit `--language markdown` or `--language json`; an explicit selection always takes precedence
-over the filename. `format` applies Markdown-prose spacing only to Markdown input, while JSON and
-unrecognized input still receive the general line-wrapping pass.
+`.json` selects JSON. Matching is case-insensitive for ASCII letters. For `check` and `debug-cst`,
+other named paths require an explicit `--language markdown` or `--language json`. An explicit
+selection always takes precedence over the filename. `format` applies Markdown-prose spacing only
+to Markdown input and, by default, runs the general line-wrapping pass for selected Markdown and
+JSON input. Unsupported named paths are returned unchanged by `format` unless an explicit
+`--language` override selects a language.
 
-When reading stdin without `--language`, `check` and `debug-cst` assume Markdown. `format` uses a
-conservative default and skips Markdown-prose spacing. Use `--language markdown` or
-`--language json` to select the stdin language explicitly.
+When reading stdin without `--language`, `check` and `debug-cst` assume Markdown. `format` does not
+select a language, so it skips both Markdown-prose spacing and line wrapping. Use `--language
+markdown` or `--language json` to select the stdin language explicitly.
+
+### Line Wrapping
+
+Line wrapping defaults to `split`, preserving the existing safe wrapping behavior. Set it to
+`preserve` to keep existing physical lines while still applying configured Markdown spacing. This
+mode does not add, remove, or join line breaks, normalize line endings, or change final-newline
+presence. JSON has no spacing edits, so it remains byte-identical in `preserve` mode.
+
+The option is available in JSON configuration, the environment, and the CLI:
+
+```json
+{ "line_wrapping": "preserve" }
+```
+
+```console
+CJKFMT_LINE_WRAPPING=preserve cjkfmt format --language markdown README.md
+cjkfmt --line-wrapping preserve format --language markdown README.md
+```
+
+`check` reports W001 for overlong physical input lines regardless of this setting or whether a
+safe wrapping opportunity exists. Formatting does not guarantee that W001 is clear: preserved
+lines may remain overlong, and spacing edits can make a line exceed `max_width`.
 
 ## Configuration
 
@@ -57,6 +81,7 @@ Currently, the following configuration options are available:
 | Option              | Description                                                           | Default  |
 | ------------------- | --------------------------------------------------------------------- | -------- |
 | `ambiguous_width`   | Width of Unicode Ambiguous characters (`narrow` or `wide`)            | `wide`   |
+| `line_wrapping`     | Preserve lines or split at safe points                                | `split`  |
 | `max_width`         | Maximum line width to allow                                           | 80       |
 | `spacing.alphabets` | Require, prohibit, or ignore spaces around full-/half-width alphabets | `ignore` |
 | `spacing.digits`    | Require, prohibit, or ignore spaces around full-/half-width digits    | `ignore` |
@@ -73,7 +98,8 @@ Depending on the configuration source, the option names are formatted slightly d
 - Command line options
   - Use hyphens between words, and put two dashes before the option name.
     Examples: `--max-width 100`, `--ambiguous-width narrow`,
-    `--spacing-alphabets require`, and `--spacing-digits prohibit`
+    `--line-wrapping preserve`, `--spacing-alphabets require`, and
+    `--spacing-digits prohibit`
 
 ### Example Configuration File
 
@@ -87,6 +113,7 @@ Below is an example configuration file `.cjkfmt.json`.
 ```json
 {
   "ambiguous_width": "wide",
+  "line_wrapping": "split",
   "max_width": 100,
   "spacing": {
     "alphabets": "require",

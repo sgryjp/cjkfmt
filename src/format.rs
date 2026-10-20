@@ -1,5 +1,5 @@
 use crate::{
-    config::Config,
+    config::{Config, LineWrapping},
     core::physical_source::PhysicalSource,
     formatting::{
         LanguageFormatError, apply_text_edits, plan_spacing_edits, policy_for,
@@ -63,6 +63,9 @@ impl Formatter {
         let edits = plan_spacing_edits(language, &source, &self.config.spacing)
             .map_err(FormatError::Language)?;
         let content = apply_text_edits(source.text(), &edits).map_err(FormatError::Language)?;
+        if self.config.line_wrapping == LineWrapping::Preserve {
+            return Ok(content);
+        }
         let content_source = PhysicalSource::new(&content);
         let mut opportunities = policy_for(language)
             .plan_break_opportunities(&content_source)
@@ -88,7 +91,7 @@ pub(crate) fn format_one_file<W: std::io::Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::SpacingRule;
+    use crate::config::{LineWrapping, SpacingRule};
 
     fn config() -> Config {
         let mut config = Config {
@@ -124,12 +127,144 @@ mod tests {
 
     #[test]
     fn formatter_leaves_source_byte_identical_when_no_language_is_selected() {
+        let source = "漢A one two three\r\n";
+
+        for line_wrapping in [LineWrapping::Preserve, LineWrapping::Split] {
+            let mut config = config();
+            config.max_width = 2;
+            config.line_wrapping = line_wrapping;
+            let formatter = Formatter::new(&config).unwrap();
+
+            assert_eq!(
+                formatter.format(None, source).unwrap(),
+                source,
+                "no-language formatting changed source in {line_wrapping:?} mode"
+            );
+        }
+    }
+
+    #[test]
+    fn omitted_and_explicit_split_modes_keep_the_existing_wrapping_output() {
+        let source = "漢A one two three\r\n";
+        let mut default_config = config();
+        default_config.max_width = 8;
+        assert_eq!(default_config.line_wrapping, LineWrapping::Split);
+        let mut split_config = default_config.clone();
+        split_config.line_wrapping = LineWrapping::Split;
+
+        let default_output = Formatter::new(&default_config)
+            .unwrap()
+            .format(Some(Language::Markdown), source)
+            .unwrap();
+        let split_output = Formatter::new(&split_config)
+            .unwrap()
+            .format(Some(Language::Markdown), source)
+            .unwrap();
+
+        assert_eq!(default_output, "漢 A one\r\ntwo\r\nthree\r\n");
+        assert_eq!(split_output, default_output);
+    }
+
+    #[test]
+    fn preserve_mode_applies_spacing_rules_only_to_markdown_prose() {
+        for (rule, source, expected) in [
+            (
+                SpacingRule::Require,
+                "漢A `漢A` [漢A](漢A)\r\n",
+                "漢 A `漢A` [漢 A](漢A)\r\n",
+            ),
+            (
+                SpacingRule::Prohibit,
+                "漢 A `漢 A` [漢 A](漢A)\r\n",
+                "漢A `漢 A` [漢A](漢A)\r\n",
+            ),
+        ] {
+            let mut config = config();
+            config.max_width = 2;
+            config.line_wrapping = LineWrapping::Preserve;
+            config.spacing.alphabets = rule;
+            let formatter = Formatter::new(&config).unwrap();
+            let formatted = formatter.format(Some(Language::Markdown), source).unwrap();
+
+            assert_eq!(formatted, expected, "wrong preserve output for {source:?}");
+            assert_eq!(
+                formatter
+                    .format(Some(Language::Markdown), &formatted)
+                    .unwrap(),
+                formatted,
+                "preserve formatting was not idempotent for {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn preserve_mode_keeps_markdown_line_endings_blank_lines_and_eof_bytes() {
         let mut config = config();
         config.max_width = 2;
-        let source = "漢A one two three\r\n";
+        config.line_wrapping = LineWrapping::Preserve;
+        config.spacing.alphabets = SpacingRule::Ignore;
         let formatter = Formatter::new(&config).unwrap();
 
-        assert_eq!(formatter.format(None, source).unwrap(), source);
+        for source in [
+            "",
+            "abcdefgh",
+            "abcdefgh\n",
+            "abcdefgh\r\n",
+            "abcdefgh\r",
+            "abcdefgh\r\n\r\n漢漢漢",
+            "abcdefgh\r漢漢\n\n",
+            "> abcdefgh\n- abcdefgh\n  continuation",
+        ] {
+            assert_eq!(
+                formatter.format(Some(Language::Markdown), source).unwrap(),
+                source,
+                "preserve mode changed physical source bytes: {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn preserve_mode_leaves_json_byte_identical_without_spacing_or_wrapping() {
+        let mut config = config();
+        config.max_width = 2;
+        config.line_wrapping = LineWrapping::Preserve;
+        let formatter = Formatter::new(&config).unwrap();
+        let source = "{\r\n\"value\":\"漢A\",\r\"items\":[true,\nfalse]\r}";
+
+        assert_eq!(
+            formatter.format(Some(Language::Json), source).unwrap(),
+            source
+        );
+    }
+
+    #[test]
+    fn preserve_mode_still_rejects_max_width_below_two() {
+        for max_width in [0, 1] {
+            let config = Config {
+                max_width,
+                line_wrapping: LineWrapping::Preserve,
+                ..Config::default()
+            };
+
+            assert!(
+                Formatter::new(&config).is_err(),
+                "preserve mode accepted max_width={max_width}"
+            );
+        }
+    }
+
+    #[test]
+    fn split_mode_does_not_join_existing_physical_lines() {
+        let mut config = config();
+        config.max_width = 5;
+        let formatter = Formatter::new(&config).unwrap();
+
+        assert_eq!(
+            formatter
+                .format(Some(Language::Markdown), "aaaa bbbb\ncccc dddd")
+                .unwrap(),
+            "aaaa\nbbbb\ncccc\ndddd"
+        );
     }
 
     #[test]
