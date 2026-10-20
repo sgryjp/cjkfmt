@@ -10,12 +10,18 @@ use crate::{
     check::check_one_file, cli::utils::format_diagnostic, config::Config, document::Document,
 };
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CheckOutcome {
+    Clean,
+    DiagnosticsFound,
+}
+
 pub fn check_command<W, P>(
     stdout: &mut W,
     config: &Config,
     filenames: &[P],
     language: Option<Language>,
-) -> anyhow::Result<()>
+) -> anyhow::Result<CheckOutcome>
 where
     W: std::io::Write,
     P: AsRef<Path>,
@@ -30,7 +36,7 @@ fn check_command_with_reader<W, P, R>(
     filenames: &[P],
     language: Option<Language>,
     stdin: &mut R,
-) -> anyhow::Result<()>
+) -> anyhow::Result<CheckOutcome>
 where
     W: std::io::Write,
     P: AsRef<Path>,
@@ -63,10 +69,15 @@ where
             diagnostics.extend(check_one_file(config, &document)?);
         }
     }
+    let outcome = if diagnostics.is_empty() {
+        CheckOutcome::Clean
+    } else {
+        CheckOutcome::DiagnosticsFound
+    };
     for diagnostic in diagnostics {
         writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
     }
-    Ok(())
+    Ok(outcome)
 }
 
 #[cfg(test)]
@@ -170,10 +181,29 @@ mod tests {
         let mut input = "漢A\n".as_bytes();
         let mut output = Vec::new();
 
-        check_command_with_reader(&mut output, &config, &[] as &[PathBuf], None, &mut input)
-            .unwrap();
+        let outcome =
+            check_command_with_reader(&mut output, &config, &[] as &[PathBuf], None, &mut input)
+                .unwrap();
 
+        assert_eq!(outcome, CheckOutcome::DiagnosticsFound);
         assert!(String::from_utf8(output).unwrap().contains("W002"));
+    }
+
+    #[test]
+    fn check_command_reports_clean_when_stdin_has_no_diagnostics() {
+        let mut input = "abc\n".as_bytes();
+        let mut output = Vec::new();
+        let config = Config {
+            max_width: 3,
+            ..Config::default()
+        };
+
+        let outcome =
+            check_command_with_reader(&mut output, &config, &[] as &[PathBuf], None, &mut input)
+                .unwrap();
+
+        assert_eq!(outcome, CheckOutcome::Clean);
+        assert!(output.is_empty());
     }
 
     #[test]

@@ -59,6 +59,12 @@ cjkfmt --line-wrapping preserve format --language markdown README.md
 safe wrapping opportunity exists. Formatting does not guarantee that W001 is clear: preserved
 lines may remain overlong, and spacing edits can make a line exceed `max_width`.
 
+## Exit Status
+
+`cjkfmt check` exits with status 0 when it completes without diagnostics, status 1 when it completes
+with one or more diagnostics, and status 2 when checking cannot be completed because of invalid
+arguments or configuration, input errors, or another operational failure.
+
 ## Configuration
 
 cjkfmt can be configured in several ways, with configuration options applied in the following order

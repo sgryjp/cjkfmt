@@ -16,7 +16,7 @@ mod spacing_checker;
 #[cfg(test)]
 mod check_test_case;
 
-use std::io::stdout;
+use std::{io::stdout, process::ExitCode};
 
 use anyhow::Context;
 use clap::Parser;
@@ -24,15 +24,30 @@ use clap::Parser;
 use crate::{
     cli::{
         args::{self, CliArgs, ColorOutputMode},
-        check::check_command,
+        check::{CheckOutcome, check_command},
         debug_cst::debug_cst_command,
         format::format_command,
     },
     config::Config,
 };
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
     let args = CliArgs::parse();
+    let error_exit_code = match &args.command {
+        args::Commands::Check { .. } => ExitCode::from(2),
+        _ => ExitCode::from(1),
+    };
+
+    match run(args) {
+        Ok(exit_code) => exit_code,
+        Err(error) => {
+            eprintln!("Error: {error:#}");
+            error_exit_code
+        }
+    }
+}
+
+fn run(args: CliArgs) -> anyhow::Result<ExitCode> {
     let config = Config::from_cli_args(&args).with_context(|| "failed to parse configuration")?;
     let mut stdout = stdout();
 
@@ -44,23 +59,32 @@ fn main() -> anyhow::Result<()> {
     };
     yansi::whenever(condition);
 
-    match args.command {
+    let exit_code = match args.command {
         args::Commands::Check {
             language,
             filenames,
-        } => check_command(&mut stdout, &config, filenames.as_slice(), language)?,
+        } => match check_command(&mut stdout, &config, filenames.as_slice(), language)? {
+            CheckOutcome::Clean => ExitCode::SUCCESS,
+            CheckOutcome::DiagnosticsFound => ExitCode::from(1),
+        },
         args::Commands::DebugCst {
             language,
             filenames,
-        } => debug_cst_command(&mut stdout, filenames.as_slice(), language)?,
+        } => {
+            debug_cst_command(&mut stdout, filenames.as_slice(), language)?;
+            ExitCode::SUCCESS
+        }
         args::Commands::Format {
             write,
             language,
             filenames,
-        } => format_command(&mut stdout, &config, filenames.as_slice(), write, language)?,
-    }
+        } => {
+            format_command(&mut stdout, &config, filenames.as_slice(), write, language)?;
+            ExitCode::SUCCESS
+        }
+    };
 
-    Ok(())
+    Ok(exit_code)
 }
 
 #[cfg(test)]

@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `cjkfmt check` now exits with status 1 when it reports diagnostics and status 2 when checking
+  fails operationally.
 - Corrected W002 spacing diagnostic positions after bare CR line endings; they could be wrong in
   v0.0.8 and earlier.
 
