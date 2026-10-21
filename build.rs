@@ -31,6 +31,8 @@ fn exec(command: &str, args: &[&str]) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo::rerun-if-changed=test_cases/check");
+
     // Define the tree-sitter grammars to be compiled
     let grammar_specs = vec![
         GrammarSpec {
