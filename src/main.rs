@@ -89,20 +89,20 @@ fn run(args: CliArgs) -> anyhow::Result<ExitCode> {
 
 #[cfg(test)]
 mod file_based_tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use crate::core::diagnostic::Diagnostic;
-    use test_generator::test_resources;
+    use rstest::rstest;
 
     use crate::_log::test_log;
     use crate::check::check_one_file;
     use crate::check_test_case::load_check_test_case;
     use crate::cli::utils::format_diagnostic;
 
-    #[test_resources("test_cases/check/*/case.json")]
-    fn check(resource: &str) {
+    #[rstest]
+    fn check(#[files("test_cases/check/*/case.json")] resource: PathBuf) {
         let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let test_case = load_check_test_case(Path::new(resource), repository_root)
+        let test_case = load_check_test_case(&resource, repository_root)
             .unwrap_or_else(|error| panic!("{error:#}"));
         let input_path = repository_root.join(
             test_case
@@ -132,7 +132,8 @@ mod file_based_tests {
         assert_eq!(
             actual.len(),
             test_case.diagnostics.len(),
-            "diagnostic count mismatch for {resource}"
+            "diagnostic count mismatch for {}",
+            resource.display()
         );
         actual
             .iter()
