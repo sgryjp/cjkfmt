@@ -7,7 +7,10 @@ use std::{
 use crate::language::Language;
 
 use crate::{
-    check::check_one_file, cli::utils::format_diagnostic, config::Config, document::Document,
+    check::{check_line_lengths, check_one_file},
+    cli::utils::format_diagnostic,
+    config::Config,
+    document::Document,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -49,7 +52,7 @@ where
         stdin.read_to_string(&mut content)?;
         let language = language.unwrap_or(Language::Markdown);
         let document = Document::new(content, Some(language), None);
-        diagnostics.extend(check_one_file(config, &document)?);
+        collect_document_diagnostics(stdout, config, &document, &mut diagnostics)?;
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
@@ -66,7 +69,7 @@ where
                 Some(language),
                 Some(filename.to_string_lossy().to_string()),
             );
-            diagnostics.extend(check_one_file(config, &document)?);
+            collect_document_diagnostics(stdout, config, &document, &mut diagnostics)?;
         }
     }
     let outcome = if diagnostics.is_empty() {
@@ -78,6 +81,26 @@ where
         writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
     }
     Ok(outcome)
+}
+
+fn collect_document_diagnostics<W: std::io::Write>(
+    stdout: &mut W,
+    config: &Config,
+    document: &Document,
+    diagnostics: &mut Vec<crate::core::diagnostic::Diagnostic>,
+) -> anyhow::Result<()> {
+    match check_one_file(config, document) {
+        Ok(found) => diagnostics.extend(found),
+        Err(error) => {
+            if document.language == Some(Language::Python) {
+                for diagnostic in check_line_lengths(config, document)? {
+                    writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
+                }
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

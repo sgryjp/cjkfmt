@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added Python language selection for `.py`, `.pyi`, and `.pyw` files and safe comment spacing with
+  the existing rules.
+  Python source layout is preserved; docstrings and comments with protected markup remain unchanged.
+  (#138)
+
 ## v0.0.10 - 2026-11-06
 
 ### Added

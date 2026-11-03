@@ -6,6 +6,7 @@ pub enum Grammar {
     Json,
     Markdown,
     MarkdownInline,
+    Python,
 }
 
 impl Language {
@@ -14,6 +15,7 @@ impl Language {
         match self {
             Self::Json => Grammar::Json,
             Self::Markdown => Grammar::Markdown,
+            Self::Python => Grammar::Python,
         }
     }
 }
@@ -26,5 +28,6 @@ mod tests {
     fn each_user_facing_language_resolves_to_its_parser_grammar() {
         assert_eq!(Language::Markdown.grammar(), Grammar::Markdown);
         assert_eq!(Language::Json.grammar(), Grammar::Json);
+        assert_eq!(Language::Python.grammar(), Grammar::Python);
     }
 }

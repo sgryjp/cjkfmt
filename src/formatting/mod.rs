@@ -6,6 +6,7 @@
 
 pub(crate) mod json;
 pub(crate) mod markdown;
+pub(crate) mod python;
 
 use std::ops::Range;
 
@@ -13,7 +14,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{config::SpacingConfig, core::physical_source::PhysicalSource, language::Language};
 
-use self::{json::JsonFormatPolicy, markdown::MarkdownFormatPolicy};
+use self::{json::JsonFormatPolicy, markdown::MarkdownFormatPolicy, python::PythonFormatPolicy};
 
 /// The spacing configuration visible to a language formatting policy.
 ///
@@ -98,6 +99,7 @@ pub(crate) fn policy_for(language: Language) -> &'static dyn LanguageFormatPolic
     match language {
         Language::Markdown => &MarkdownFormatPolicy,
         Language::Json => &JsonFormatPolicy,
+        Language::Python => &PythonFormatPolicy,
     }
 }
 

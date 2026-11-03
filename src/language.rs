@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) enum Language {
     Markdown,
     Json,
+    Python,
 }
 
 impl Language {
@@ -19,6 +20,11 @@ impl Language {
             Some(Self::Markdown)
         } else if extension.eq_ignore_ascii_case("json") {
             Some(Self::Json)
+        } else if ["py", "pyi", "pyw"]
+            .iter()
+            .any(|supported| extension.eq_ignore_ascii_case(supported))
+        {
+            Some(Self::Python)
         } else {
             None
         }
@@ -59,6 +65,15 @@ mod tests {
             ("config.json", Some(Language::Json)),
             ("config.JSON", Some(Language::Json)),
             ("config.JsOn", Some(Language::Json)),
+            ("script.py", Some(Language::Python)),
+            ("script.PY", Some(Language::Python)),
+            ("script.Py", Some(Language::Python)),
+            ("script.pyi", Some(Language::Python)),
+            ("script.PYI", Some(Language::Python)),
+            ("script.PyI", Some(Language::Python)),
+            ("script.pyw", Some(Language::Python)),
+            ("script.PYW", Some(Language::Python)),
+            ("script.pYw", Some(Language::Python)),
         ];
 
         for (path, expected) in cases {
@@ -68,7 +83,14 @@ mod tests {
 
     #[test]
     fn language_resolution_returns_none_for_unrecognized_filenames() {
-        for path in ["document.txt", "main.rs", "README", "README.md.txt"] {
+        for path in [
+            "document.txt",
+            "main.rs",
+            "README",
+            "README.md.txt",
+            "script.py.txt",
+            "script.pyx",
+        ] {
             assert_eq!(Language::from_path(Path::new(path)), None, "{path}");
         }
     }

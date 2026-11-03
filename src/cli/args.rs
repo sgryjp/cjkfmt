@@ -199,7 +199,11 @@ mod tests {
     #[case("check")]
     #[case("debug-cst")]
     fn language_flag_accepts_supported_values_and_defaults_to_none(#[case] command: &str) {
-        for (value, expected) in [("markdown", Language::Markdown), ("json", Language::Json)] {
+        for (value, expected) in [
+            ("markdown", Language::Markdown),
+            ("json", Language::Json),
+            ("python", Language::Python),
+        ] {
             let args = CliArgs::try_parse_from(["cjkfmt", command, "--language", value])
                 .expect("supported language should parse");
             assert_eq!(selected_language(args), Some(expected));

@@ -125,10 +125,10 @@ test_cases/check/<case>/
 ```
 
 `case.json` must contain `input_file`, `config`, and `diagnostics`. Use an empty array
-when the case expects no diagnostics. The optional `language` field accepts `markdown`
-or `json`; it overrides language detection from the input file extension. Without it,
-`.md`/`.markdown` and `.json` select their matching Language. An unsupported or missing
-extension is an error.
+when the case expects no diagnostics. The optional `language` field accepts `markdown`,
+`json`, or `python`; it overrides language detection from the input file extension. Without
+it, `.md`/`.markdown`, `.json`, and `.py`/`.pyi`/`.pyw` select their matching Language,
+case-insensitively for ASCII letters. An unsupported or missing extension is an error.
 
 Diagnostic positions use zero-based line numbers and zero-based UTF-16 code-unit columns.
 The end position is exclusive. Keep the expected diagnostics in their actual order.
