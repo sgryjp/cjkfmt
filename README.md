@@ -13,6 +13,39 @@
   [this](https://www.rust-lang.org/tools/install) guide.
 - run `cargo install cjkfmt`
 
+### pre-commit
+
+Install [pre-commit](https://pre-commit.com/) 4.4.0 or later and `cjkfmt` separately, and make sure
+`cjkfmt` is on `PATH`. Add the desired hooks to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/sgryjp/cjkfmt
+    rev: '<release tag containing the hooks>'
+    hooks:
+      - id: cjkfmt-format
+      # Optionally check for diagnostics as well:
+      # - id: cjkfmt-check
+```
+
+Run `pre-commit install` to enable the hooks. Use `pre-commit run --all-files` to run them on all
+tracked files. `cjkfmt-format` writes formatted files; if it changes a file, review and stage the
+change before committing again. `cjkfmt-check` reports diagnostics without changing files.
+Formatting does not necessarily clear every check diagnostic, so choose either or both hooks as
+needed.
+
+The hooks use the installed `cjkfmt` executable; the `rev` selects the hook definition, not the
+executable version. Manage the installed version separately to keep results consistent across a
+team. The usual cjkfmt configuration and environment variables also apply.
+
+By default, the hooks select `.md` and `.markdown` files, case-insensitively. To include JSON,
+for example, override `files` on each hook that needs it:
+
+```yaml
+      - id: cjkfmt-check
+        files: '(?i)\.(md|markdown|json)$'
+```
+
 ## Formatting Files
 
 To replace named files with their formatted content, use the `--write` option:

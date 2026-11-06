@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added pre-commit hooks for formatting and checking with an existing cjkfmt installation. (#145)
+
 ## v0.0.9 - 2026-10-20
 
 ### Added
