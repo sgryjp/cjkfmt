@@ -1,0 +1,13 @@
+- id: cjkfmt-format
+  name: cjkfmt format
+  entry: cjkfmt format --write
+  language: unsupported
+  minimum_pre_commit_version: '4.4.0'
+  files: '(?i)\.(md|markdown)$'
+
+- id: cjkfmt-check
+  name: cjkfmt check
+  entry: cjkfmt check
+  language: unsupported
+  minimum_pre_commit_version: '4.4.0'
+  files: '(?i)\.(md|markdown)$'
