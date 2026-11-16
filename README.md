@@ -146,9 +146,10 @@ Depending on the configuration source, the option names are formatted slightly d
 
 The `format` command applies the spacing rules to Markdown prose, including visible text inside
 emphasis and links. Code spans, fenced code blocks, URLs, HTML, and other non-prose inline content
-are left unchanged. Python support currently covers safe comments only; docstrings and comment
-regions with protected markup are skipped. See [Python support](docs/design/python.md) for
-coverage limits, grammar, and encoding details. For spacing behavior, see [the spacing
+are left unchanged. Python support covers safe comments and actual docstrings; docstrings and
+comment regions with protected markup are skipped conservatively. See
+[Python support](docs/design/python.md) for coverage limits, grammar, and encoding details. For
+spacing behavior, see [the spacing
 specification](docs/design/spacing.md).
 
 Below is an example configuration file `.cjkfmt.json`.
