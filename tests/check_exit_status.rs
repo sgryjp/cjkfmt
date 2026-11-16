@@ -1,5 +1,6 @@
 use std::{
     io::Write,
+    path::Path,
     process::{Command, Output, Stdio},
 };
 
@@ -7,6 +8,18 @@ use tempfile::tempdir;
 
 fn run_cjkfmt(args: &[&str], input: &str, config: Option<&str>) -> Output {
     run_cjkfmt_with_input(args, input.as_bytes(), config, &[])
+}
+
+fn run_cjkfmt_in_directory(args: &[&str], directory: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_cjkfmt"))
+        .args(["--color", "never"])
+        .args(args)
+        .current_dir(directory)
+        .env_clear()
+        .env("HOME", directory)
+        .env("XDG_CONFIG_HOME", directory)
+        .output()
+        .expect("cjkfmt should finish")
 }
 
 fn run_cjkfmt_with_input(
@@ -96,6 +109,168 @@ fn format_exits_one_when_an_input_file_cannot_be_read() {
             .unwrap()
             .starts_with("Error: ")
     );
+}
+
+#[test]
+fn format_stops_python_stdout_batches_at_syntax_and_input_errors() {
+    let failing_inputs: [(&str, &[u8], &str); 3] = [
+        (
+            "syntax",
+            "# 漢A\nif :\n".as_bytes(),
+            "Python syntax parse failed",
+        ),
+        ("invalid UTF-8", &[b'#', b' ', 0xff], "valid UTF-8"),
+        (
+            "incompatible encoding",
+            "# coding: latin-1\n# 漢A\n".as_bytes(),
+            "not supported; use UTF-8",
+        ),
+    ];
+
+    for (case, failing_input, error_hint) in failing_inputs {
+        let directory = tempdir().expect("temporary directory should be created");
+        std::fs::write(directory.path().join("valid.py"), "# 漢A\n").unwrap();
+        std::fs::write(directory.path().join("invalid.py"), failing_input).unwrap();
+        std::fs::write(directory.path().join("later.py"), "# 漢A\n").unwrap();
+
+        let output = run_cjkfmt_in_directory(
+            &[
+                "--spacing-alphabets",
+                "require",
+                "format",
+                "valid.py",
+                "invalid.py",
+                "later.py",
+            ],
+            directory.path(),
+        );
+
+        assert_eq!(output.status.code(), Some(1), "{case}");
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            "# 漢 A\n",
+            "{case}"
+        );
+        assert!(
+            String::from_utf8(output.stderr)
+                .unwrap()
+                .contains(error_hint),
+            "{case}"
+        );
+        assert_eq!(
+            std::fs::read(directory.path().join("invalid.py")).unwrap(),
+            failing_input,
+            "failed input should remain unchanged: {case}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("later.py")).unwrap(),
+            "# 漢A\n",
+            "later input should not be processed: {case}"
+        );
+    }
+}
+
+#[test]
+fn format_write_batches_keep_completed_files_and_skip_failed_and_later_python_inputs() {
+    let failing_inputs: [(&str, &[u8], &str); 3] = [
+        (
+            "syntax",
+            "# 漢A\nif :\n".as_bytes(),
+            "Python syntax parse failed",
+        ),
+        ("invalid UTF-8", &[b'#', b' ', 0xff], "valid UTF-8"),
+        (
+            "incompatible encoding",
+            "# coding: latin-1\n# 漢A\n".as_bytes(),
+            "not supported; use UTF-8",
+        ),
+    ];
+
+    for (case, failing_input, error_hint) in failing_inputs {
+        let directory = tempdir().expect("temporary directory should be created");
+        std::fs::write(directory.path().join("valid.py"), "# 漢A\n").unwrap();
+        std::fs::write(directory.path().join("invalid.py"), failing_input).unwrap();
+        std::fs::write(directory.path().join("later.py"), "# 漢A\n").unwrap();
+
+        let output = run_cjkfmt_in_directory(
+            &[
+                "--spacing-alphabets",
+                "require",
+                "format",
+                "--write",
+                "valid.py",
+                "invalid.py",
+                "later.py",
+            ],
+            directory.path(),
+        );
+
+        assert_eq!(output.status.code(), Some(1), "{case}");
+        assert!(output.stdout.is_empty(), "{case}");
+        assert!(
+            String::from_utf8(output.stderr)
+                .unwrap()
+                .contains(error_hint),
+            "{case}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("valid.py")).unwrap(),
+            "# 漢 A\n",
+            "completed file should remain formatted: {case}"
+        );
+        assert_eq!(
+            std::fs::read(directory.path().join("invalid.py")).unwrap(),
+            failing_input,
+            "failed input should remain unchanged: {case}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("later.py")).unwrap(),
+            "# 漢A\n",
+            "later input should not be processed: {case}"
+        );
+    }
+}
+
+#[test]
+fn format_batches_keep_completed_output_and_stop_at_an_unreadable_python_file() {
+    for write in [false, true] {
+        let directory = tempdir().expect("temporary directory should be created");
+        std::fs::write(directory.path().join("valid.py"), "# 漢A\n").unwrap();
+        std::fs::write(directory.path().join("later.py"), "# 漢A\n").unwrap();
+
+        let mut args = vec!["--spacing-alphabets", "require", "format"];
+        if write {
+            args.push("--write");
+        }
+        args.extend(["valid.py", "missing.py", "later.py"]);
+        let output = run_cjkfmt_in_directory(&args, directory.path());
+
+        assert_eq!(output.status.code(), Some(1), "write={write}");
+        assert!(
+            String::from_utf8(output.stderr)
+                .unwrap()
+                .starts_with("Error: "),
+            "write={write}"
+        );
+        if write {
+            assert!(output.stdout.is_empty());
+            assert_eq!(
+                std::fs::read_to_string(directory.path().join("valid.py")).unwrap(),
+                "# 漢 A\n"
+            );
+        } else {
+            assert_eq!(String::from_utf8(output.stdout).unwrap(), "# 漢 A\n");
+            assert_eq!(
+                std::fs::read_to_string(directory.path().join("valid.py")).unwrap(),
+                "# 漢A\n"
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join("later.py")).unwrap(),
+            "# 漢A\n",
+            "later input should not be processed: write={write}"
+        );
+    }
 }
 
 #[test]
@@ -359,7 +534,7 @@ fn check_keeps_python_line_length_diagnostics_when_syntax_is_invalid() {
 }
 
 #[test]
-fn check_preserves_diagnostics_before_a_later_python_syntax_error() {
+fn check_preserves_prior_and_independent_diagnostics_before_stopping_at_python_syntax_errors() {
     let output = run_cjkfmt_with_input(
         &[
             "--spacing-alphabets",
@@ -369,22 +544,58 @@ fn check_preserves_diagnostics_before_a_later_python_syntax_error() {
             "check",
             "valid.py",
             "invalid.py",
+            "later.py",
         ],
         b"",
         None,
-        &[("valid.py", "# 漢A\n"), ("invalid.py", "# 123456\nif :\n")],
+        &[
+            ("valid.py", "# 漢A\n"),
+            ("invalid.py", "# 漢A 123456\nif :\n"),
+            ("later.py", "# 漢A\n"),
+        ],
     );
 
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
         "valid.py:1:4: W002 Possible spacing position found\n\
-         invalid.py:1:6: W001 Line length exceeds 5 characters\n"
+         invalid.py:1:5: W001 Line length exceeds 5 characters\n"
     );
     assert!(
         String::from_utf8(output.stderr)
             .unwrap()
             .contains("Python syntax parse failed")
+    );
+}
+
+#[test]
+fn check_keeps_prior_diagnostics_without_claiming_w001_for_undecodable_batch_input() {
+    let directory = tempdir().expect("temporary directory should be created");
+    std::fs::write(directory.path().join("valid.py"), "# 漢A\n").unwrap();
+    std::fs::write(directory.path().join("invalid.py"), [b'#', b' ', 0xff]).unwrap();
+    std::fs::write(directory.path().join("later.py"), "# 漢A\n").unwrap();
+
+    let output = run_cjkfmt_in_directory(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "check",
+            "valid.py",
+            "invalid.py",
+            "later.py",
+        ],
+        directory.path(),
+    );
+
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "valid.py:1:4: W002 Possible spacing position found\n"
+    );
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .starts_with("Error: ")
     );
 }
 
