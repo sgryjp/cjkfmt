@@ -7,6 +7,7 @@
 pub(crate) mod json;
 pub(crate) mod markdown;
 pub(crate) mod python;
+mod python_comment_markup;
 pub(crate) mod python_docstring;
 mod python_markup;
 

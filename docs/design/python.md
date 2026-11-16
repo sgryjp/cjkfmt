@@ -34,6 +34,20 @@ Spacing applies to syntax-recognized Python comments and actual docstrings. A tr
 considered independently. Consecutive standalone comments with matching indentation form one region;
 blank lines, code, and indentation changes end that region.
 
+In consecutive standalone-comment regions, cjkfmt protects Markdown fenced code blocks (backtick
+or tilde fences), reStructuredText code and code-block directives, indented literal blocks
+introduced by `::`, and doctest prompts, continuations, and output. Safe prose before and after a
+protected block remains eligible for spacing. If a block is incomplete or its end cannot be
+determined safely, the remainder of that comment region is left unchanged. Trailing comments are
+considered independently.
+
+Inline code spans and URLs are protected, while surrounding prose and inline link display text
+remain eligible for spacing. When cjkfmt cannot determine a safe boundary for inline or other
+recognizable markup, it leaves the remainder of the comment region unchanged. This is not a
+complete Markdown or reStructuredText parser. Unmarked code-like text and machine-directed comments
+are not reliably detected and may be formatted; explicitly mark code examples to keep them
+unchanged. cjkfmt does not maintain a blacklist of tool-specific comment directives.
+
 A docstring must be the first statement in its module, class, or synchronous or asynchronous
 function. Comments do not count as statements. Parenthesized and implicitly concatenated ordinary
 strings, including optional `u` and `r` prefixes, are supported. Each literal is processed
@@ -41,18 +55,15 @@ independently. Spacing decisions do not cross literal boundaries or escape seque
 spelling, escapes, quotes, prefixes, indentation, and line endings are preserved.
 
 Byte strings, f-strings, binary expressions, ordinary strings, attribute docstrings, and additional
-docstrings are not formatted. Until protected-markup support is implemented, cjkfmt conservatively
-skips a whole docstring containing common markup indicators such as backticks, URL or link syntax,
-code fences, reST literal/directive markers, or doctest prompts. It likewise skips an entire comment
-region when it sees those indicators, avoiding partial changes to marked examples split across
-consecutive comments. Detection is intentionally conservative, not a complete Markdown or
-reStructuredText parser. Unmarked code-like text and machine-directed comments are not reliably
-detected and may be formatted; explicitly mark examples to keep them unchanged.
+docstrings are not formatted. Docstring-specific protected-markup handling is not yet implemented,
+so cjkfmt conservatively skips a whole docstring containing common markup indicators such as
+backticks, URL or link syntax, code fences, reST literal/directive markers, or doctest prompts. This
+is not a complete Markdown or reStructuredText parser.
 
 `check` derives W002 from the same validated spacing plan used by `format`, so reported locations
 refer to the original source. W001 checks physical lines independently of spacing and wrapping. A
 readable Python file with syntax errors can still report W001, but it reports no W002 and the
 command fails operationally. Undecodable input is rejected before diagnostics are calculated.
 
-Protected markup is handled conservatively at whole-docstring or whole-comment-region granularity;
-safe subregions adjacent to protected markup are not formatted yet.
+Docstrings containing protected markup are skipped as a whole. Comment regions use safe source
+ranges around recognized markup and fail closed when a boundary is ambiguous.

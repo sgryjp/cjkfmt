@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use super::python_comment_markup::protected_prose_ranges;
+
 pub(crate) fn safe_comment_body_ranges(source: &str, bodies: &[Range<usize>]) -> Vec<Range<usize>> {
     let mut region = String::new();
     let mut segments = Vec::with_capacity(bodies.len());
@@ -13,7 +15,19 @@ pub(crate) fn safe_comment_body_ranges(source: &str, bodies: &[Range<usize>]) ->
     }
 
     let mut safe_region = Vec::new();
-    scan_safe_ranges(&region, 0..region.len(), &mut safe_region);
+    let mut cursor = 0;
+    for protected in protected_prose_ranges(&region) {
+        if cursor < protected.start
+            && !scan_safe_ranges(&region, cursor..protected.start, &mut safe_region)
+        {
+            cursor = region.len();
+            break;
+        }
+        cursor = protected.end;
+    }
+    if cursor < region.len() {
+        scan_safe_ranges(&region, cursor..region.len(), &mut safe_region);
+    }
 
     safe_region
         .into_iter()
