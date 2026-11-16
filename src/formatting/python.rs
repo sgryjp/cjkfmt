@@ -1,6 +1,6 @@
 //! The initial Python policy: spacing in safe comments only.
 
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
 
 use super::{BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, SpacingRules, TextEdit};
 use crate::{
@@ -34,7 +34,8 @@ impl LanguageFormatPolicy for PythonFormatPolicy {
             .map_or((text, 0), |without_bom| {
                 (without_bom, '\u{feff}'.len_utf8())
             });
-        let tree = parse(Grammar::Python, parse_text)
+        let parse_text = normalize_bare_carriage_returns(parse_text);
+        let tree = parse(Grammar::Python, &parse_text)
             .map_err(|error| LanguageFormatError::Policy(error.to_string()))?;
         let root = tree.root_node();
         if root.has_error() || contains_missing_node(root) {
@@ -49,7 +50,9 @@ impl LanguageFormatPolicy for PythonFormatPolicy {
         while index < comments.len() {
             let comment = &comments[index];
             if !comment.standalone {
-                plan_comment_edits(text, &comment.range, rules, &mut edits);
+                if !contains_protected_markup(text, &comment.range) {
+                    plan_comment_edits(text, &comment.range, rules, &mut edits);
+                }
                 index += 1;
                 continue;
             }
@@ -137,6 +140,25 @@ fn contains_missing_node(node: Node<'_>) -> bool {
     node.children(&mut cursor).any(contains_missing_node)
 }
 
+// The grammar uses LF to terminate comments; this same-length parser copy keeps
+// source byte ranges intact while letting bare-CR lines parse independently.
+fn normalize_bare_carriage_returns(source: &str) -> Cow<'_, str> {
+    if !source.as_bytes().contains(&b'\r') {
+        return Cow::Borrowed(source);
+    }
+
+    let mut normalized = String::with_capacity(source.len());
+    let mut characters = source.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character == '\r' && characters.peek() != Some(&'\n') {
+            normalized.push('\n');
+        } else {
+            normalized.push(character);
+        }
+    }
+    Cow::Owned(normalized)
+}
+
 fn plan_comment_edits(
     source: &str,
     range: &Range<usize>,
@@ -177,39 +199,67 @@ fn contains_protected_markup(source: &str, range: &Range<usize>) -> bool {
 fn validate_python_encoding(source: &str) -> Result<(), LanguageFormatError> {
     let has_bom = source.starts_with('\u{feff}');
     let source_lines = PhysicalSource::new(source);
-    for line in source_lines.lines().take(2) {
-        let line = line.content();
-        let trimmed = line.trim_start_matches('\u{feff}').trim_start();
-        if !trimmed.starts_with('#') {
-            continue;
+    let lines = source_lines
+        .lines()
+        .take(2)
+        .map(|line| line.content())
+        .collect::<Vec<_>>();
+    let Some(first_line) = lines.first() else {
+        return Ok(());
+    };
+    let first_line = first_line.strip_prefix('\u{feff}').unwrap_or(first_line);
+    let declaration = python_encoding_cookie(first_line).or_else(|| {
+        if python_line_allows_second_encoding_cookie(first_line) {
+            lines.get(1).and_then(|line| python_encoding_cookie(line))
+        } else {
+            None
         }
-        let Some((_, declaration)) = trimmed.split_once("coding") else {
-            continue;
-        };
-        let Some((_, declaration)) = declaration.split_once([':', '=']) else {
-            continue;
-        };
-        let encoding = declaration
-            .trim_start()
-            .chars()
-            .take_while(|character| character.is_ascii_alphanumeric() || "._-".contains(*character))
-            .collect::<String>();
-        if encoding.is_empty() {
-            continue;
-        }
-        let normalized = encoding
-            .chars()
-            .filter(|character| !matches!(character, '-' | '_' | '.'))
-            .flat_map(char::to_lowercase)
-            .collect::<String>();
-        if !matches!(normalized.as_str(), "utf8" | "utf8sig") {
-            let message = if has_bom {
-                "UTF-8 BOM conflicts with the Python encoding declaration".to_owned()
-            } else {
-                format!("Python source encoding {encoding:?} is not supported; use UTF-8")
-            };
-            return Err(LanguageFormatError::Policy(message));
-        }
+    });
+    let Some(encoding) = declaration else {
+        return Ok(());
+    };
+
+    let normalized = encoding
+        .chars()
+        .filter(|character| !matches!(character, '-' | '_' | '.'))
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    if matches!(
+        normalized.as_str(),
+        "utf8" | "utf8sig" | "u8" | "utf" | "cp65001"
+    ) {
+        return Ok(());
     }
-    Ok(())
+
+    let message = if has_bom {
+        "UTF-8 BOM conflicts with the Python encoding declaration".to_owned()
+    } else {
+        format!("Python source encoding {encoding:?} is not supported; use UTF-8")
+    };
+    Err(LanguageFormatError::Policy(message))
+}
+
+// Python only treats line two as a cookie when line one is blank or a comment.
+fn python_encoding_cookie(line: &str) -> Option<&str> {
+    let line = line.trim_start_matches([' ', '\t', '\x0c']);
+    let comment = line.strip_prefix('#')?;
+    let declaration = comment.match_indices("coding").find_map(|(index, _)| {
+        let suffix = &comment[index + "coding".len()..];
+        let suffix = suffix
+            .strip_prefix(':')
+            .or_else(|| suffix.strip_prefix('='))?;
+        Some(suffix.trim_start_matches([' ', '\t']))
+    })?;
+    let end = declaration
+        .char_indices()
+        .find_map(|(index, character)| {
+            (!character.is_ascii_alphanumeric() && !"._-".contains(character)).then_some(index)
+        })
+        .unwrap_or(declaration.len());
+    (end > 0).then_some(&declaration[..end])
+}
+
+fn python_line_allows_second_encoding_cookie(line: &str) -> bool {
+    let line = line.trim_start_matches([' ', '\t', '\x0c']);
+    line.is_empty() || line.starts_with('#')
 }

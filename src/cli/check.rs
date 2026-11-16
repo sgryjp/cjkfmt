@@ -52,24 +52,33 @@ where
         stdin.read_to_string(&mut content)?;
         let language = language.unwrap_or(Language::Markdown);
         let document = Document::new(content, Some(language), None);
-        collect_document_diagnostics(stdout, config, &document, &mut diagnostics)?;
+        if let Err(error) = collect_document_diagnostics(config, &document, &mut diagnostics) {
+            write_diagnostics(stdout, &mut diagnostics)?;
+            return Err(error);
+        }
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let language =
-                Language::explicit_or_inferred_path(language, filename).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "could not infer the language for {}; specify it with --language",
-                        filename.display()
-                    )
-                })?;
-            let content = fs::read_to_string(filename)?;
-            let document = Document::new(
-                content,
-                Some(language),
-                Some(filename.to_string_lossy().to_string()),
-            );
-            collect_document_diagnostics(stdout, config, &document, &mut diagnostics)?;
+            let result = (|| {
+                let language =
+                    Language::explicit_or_inferred_path(language, filename).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "could not infer the language for {}; specify it with --language",
+                            filename.display()
+                        )
+                    })?;
+                let content = fs::read_to_string(filename)?;
+                let document = Document::new(
+                    content,
+                    Some(language),
+                    Some(filename.to_string_lossy().to_string()),
+                );
+                collect_document_diagnostics(config, &document, &mut diagnostics)
+            })();
+            if let Err(error) = result {
+                write_diagnostics(stdout, &mut diagnostics)?;
+                return Err(error);
+            }
         }
     }
     let outcome = if diagnostics.is_empty() {
@@ -77,14 +86,21 @@ where
     } else {
         CheckOutcome::DiagnosticsFound
     };
-    for diagnostic in diagnostics {
-        writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
-    }
+    write_diagnostics(stdout, &mut diagnostics)?;
     Ok(outcome)
 }
 
-fn collect_document_diagnostics<W: std::io::Write>(
+fn write_diagnostics<W: std::io::Write>(
     stdout: &mut W,
+    diagnostics: &mut Vec<crate::core::diagnostic::Diagnostic>,
+) -> anyhow::Result<()> {
+    for diagnostic in diagnostics.drain(..) {
+        writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
+    }
+    Ok(())
+}
+
+fn collect_document_diagnostics(
     config: &Config,
     document: &Document,
     diagnostics: &mut Vec<crate::core::diagnostic::Diagnostic>,
@@ -93,9 +109,7 @@ fn collect_document_diagnostics<W: std::io::Write>(
         Ok(found) => diagnostics.extend(found),
         Err(error) => {
             if document.language == Some(Language::Python) {
-                for diagnostic in check_line_lengths(config, document)? {
-                    writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
-                }
+                diagnostics.extend(check_line_lengths(config, document)?);
             }
             return Err(error);
         }

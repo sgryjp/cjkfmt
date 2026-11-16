@@ -20,7 +20,9 @@ The bundled Tree-sitter Python grammar is pinned to revision
 [`tree-sitter-python`](https://github.com/tree-sitter/tree-sitter-python). cjkfmt does not invoke a
 Python interpreter. Syntax errors and missing syntax nodes reported by this grammar are treated as
 operational failures, but successful parsing is not a guarantee that every Python interpreter or
-version accepts the source.
+version accepts the source. This revision may recover from incomplete constructs Python rejects; for
+example, it can accept `def f():` without a body. Syntax validation is therefore limited to errors
+reported by the pinned grammar.
 
 Python input must be UTF-8, with or without a UTF-8 BOM. The BOM is preserved. Invalid UTF-8,
 non-UTF-8 encoding declarations in the first two source lines, and conflicting BOM/declaration

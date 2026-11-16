@@ -358,6 +358,36 @@ fn check_keeps_python_line_length_diagnostics_when_syntax_is_invalid() {
 }
 
 #[test]
+fn check_preserves_diagnostics_before_a_later_python_syntax_error() {
+    let output = run_cjkfmt_with_input(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "--max-width",
+            "5",
+            "check",
+            "valid.py",
+            "invalid.py",
+        ],
+        b"",
+        None,
+        &[("valid.py", "# 漢A\n"), ("invalid.py", "# 123456\nif :\n")],
+    );
+
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "valid.py:1:4: W002 Possible spacing position found\n\
+         invalid.py:1:6: W001 Line length exceeds 5 characters\n"
+    );
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("Python syntax parse failed")
+    );
+}
+
+#[test]
 fn python_spacing_rules_cover_standalone_and_trailing_comments_without_wrapping() {
     for (rule, source, expected) in [
         (
@@ -445,6 +475,150 @@ fn python_comment_group_with_protected_markup_is_left_wholly_unchanged() {
 }
 
 #[test]
+fn python_accepts_common_utf8_encoding_aliases() {
+    for encoding in ["UTF_8", "utf8", "u8", "cp65001", "utf-8-sig"] {
+        let source = format!("# coding: {encoding}\n# 漢A\n");
+        let output = run_cjkfmt(
+            &[
+                "--spacing-alphabets",
+                "require",
+                "format",
+                "--language",
+                "python",
+            ],
+            &source,
+            None,
+        );
+
+        assert_eq!(output.status.code(), Some(0), "encoding={encoding}");
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            format!("# coding: {encoding}\n# 漢 A\n"),
+            "encoding={encoding}"
+        );
+    }
+}
+
+#[test]
+fn python_encoding_detection_ignores_words_after_coding() {
+    let source = "# coding guidelines: examples\n# 漢A\n";
+    let output = run_cjkfmt(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "format",
+            "--language",
+            "python",
+        ],
+        source,
+        None,
+    );
+
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "# coding guidelines: examples\n# 漢 A\n"
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn python_ignores_encoding_cookies_after_code_on_the_first_line() {
+    let source = "value = 1\n# coding: latin-1\n# 漢A\n";
+    let output = run_cjkfmt(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "format",
+            "--language",
+            "python",
+        ],
+        source,
+        None,
+    );
+
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "value = 1\n# coding: latin-1\n# 漢 A\n"
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn python_trailing_comments_with_protected_markup_remain_unchanged() {
+    let source = "x = 1  # `漢A`\nvalue = 2  # https://example.com/漢A\n# 漢A\n";
+    let expected = "x = 1  # `漢A`\nvalue = 2  # https://example.com/漢A\n# 漢 A\n";
+    let format = run_cjkfmt(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "format",
+            "--language",
+            "python",
+        ],
+        source,
+        None,
+    );
+    assert_eq!(format.status.code(), Some(0));
+    assert_eq!(String::from_utf8(format.stdout).unwrap(), expected);
+
+    let check = run_cjkfmt(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "check",
+            "--language",
+            "python",
+        ],
+        source,
+        None,
+    );
+    assert_eq!(check.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(check.stdout).unwrap(),
+        "<stdin>:3:4: W002 Possible spacing position found\n"
+    );
+}
+
+#[test]
+fn python_bare_cr_lines_keep_code_and_strings_outside_comment_edits() {
+    let source = "# 漢A\rvalue = \"漢B\"\r# 漢C\n";
+    let expected = "# 漢 A\rvalue = \"漢B\"\r# 漢 C\n";
+    let format = run_cjkfmt(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "format",
+            "--language",
+            "python",
+        ],
+        source,
+        None,
+    );
+    assert_eq!(format.status.code(), Some(0));
+    assert_eq!(String::from_utf8(format.stdout).unwrap(), expected);
+
+    let check = run_cjkfmt(
+        &[
+            "--spacing-alphabets",
+            "require",
+            "check",
+            "--language",
+            "python",
+        ],
+        source,
+        None,
+    );
+    assert_eq!(check.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(check.stdout).unwrap(),
+        "<stdin>:1:4: W002 Possible spacing position found\n\
+         <stdin>:3:4: W002 Possible spacing position found\n"
+    );
+}
+
+#[test]
 fn python_format_rejects_syntax_errors_without_emitting_formatted_source() {
     let output = run_cjkfmt(
         &[
@@ -485,6 +659,23 @@ fn python_format_preserves_bom_and_mixed_physical_line_endings() {
 
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
+}
+
+#[test]
+fn python_rejects_a_non_utf8_encoding_cookie_after_a_shebang() {
+    let output = run_cjkfmt(
+        &["format", "--language", "python"],
+        "#!/usr/bin/env python\n# coding: latin-1\n# 漢A\n",
+        None,
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("Python source encoding \"latin-1\" is not supported")
+    );
 }
 
 #[test]
@@ -563,6 +754,40 @@ fn python_write_formats_valid_files_and_leaves_syntax_failures_untouched() {
             .contains("Python syntax parse failed")
     );
     assert_eq!(std::fs::read(&invalid_path).unwrap(), original_invalid);
+}
+
+#[test]
+fn python_write_leaves_encoding_rejected_files_unchanged() {
+    let directory = tempdir().expect("temporary directory should be created");
+    let path = directory.path().join("encoded.py");
+    let original = "# coding: latin-1\n# 漢A\n";
+    std::fs::write(&path, original).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_cjkfmt"))
+        .args([
+            "--color",
+            "never",
+            "--spacing-alphabets",
+            "require",
+            "format",
+            "--write",
+        ])
+        .arg(&path)
+        .current_dir(directory.path())
+        .env_clear()
+        .env("HOME", directory.path())
+        .env("XDG_CONFIG_HOME", directory.path())
+        .output()
+        .expect("format should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("not supported; use UTF-8")
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), original.as_bytes());
 }
 
 #[test]
