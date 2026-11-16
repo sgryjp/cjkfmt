@@ -28,7 +28,7 @@ non-UTF-8 encoding declarations in the first two source lines, and conflicting B
 combinations are rejected rather than rewritten. Python source remains otherwise byte-preserving:
 indentation, comment markers, physical line endings, and source layout are unchanged.
 
-## Comment coverage and limits
+## Python prose coverage and limits
 
 Spacing applies to syntax-recognized Python comments and actual docstrings. A trailing comment is
 considered independently. Consecutive standalone comments with matching indentation form one region;
