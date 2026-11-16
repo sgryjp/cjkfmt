@@ -14,22 +14,7 @@ pub(crate) fn safe_comment_body_ranges(source: &str, bodies: &[Range<usize>]) ->
         segments.push((logical_start..region.len(), body.clone()));
     }
 
-    let mut safe_region = Vec::new();
-    let mut cursor = 0;
-    for protected in protected_prose_ranges(&region) {
-        if cursor < protected.start
-            && !scan_safe_ranges(&region, cursor..protected.start, &mut safe_region)
-        {
-            cursor = region.len();
-            break;
-        }
-        cursor = protected.end;
-    }
-    if cursor < region.len() {
-        scan_safe_ranges(&region, cursor..region.len(), &mut safe_region);
-    }
-
-    safe_region
+    safe_prose_ranges(&region)
         .into_iter()
         .flat_map(|safe| {
             segments.iter().filter_map(move |(logical, original)| {
@@ -41,6 +26,25 @@ pub(crate) fn safe_comment_body_ranges(source: &str, bodies: &[Range<usize>]) ->
             })
         })
         .collect()
+}
+
+pub(crate) fn safe_prose_ranges(prose: &str) -> Vec<Range<usize>> {
+    let mut safe_region = Vec::new();
+    let mut cursor = 0;
+    for protected in protected_prose_ranges(prose) {
+        if cursor < protected.start
+            && !scan_safe_ranges(prose, cursor..protected.start, &mut safe_region)
+        {
+            cursor = prose.len();
+            break;
+        }
+        cursor = protected.end;
+    }
+    if cursor < prose.len() {
+        scan_safe_ranges(prose, cursor..prose.len(), &mut safe_region);
+    }
+
+    safe_region
 }
 
 fn scan_safe_ranges(text: &str, range: Range<usize>, safe: &mut Vec<Range<usize>>) -> bool {

@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use tree_sitter::Node;
 
-use super::{SpacingRules, TextEdit};
+use super::{SpacingRules, TextEdit, python_markup::safe_prose_ranges};
 use crate::spacing::spacing_edits;
 
 pub(crate) fn plan_docstring_edits(
@@ -27,12 +27,8 @@ fn collect_docstring_edits(
 ) {
     if let Some(expression) = first_docstring_expression(node) {
         let mut literals = Vec::new();
-        if collect_docstring_literals(expression, source, bom_bytes, &mut literals)
-            && !docstring_contains_protected_markup(source, &literals, bom_bytes)
-        {
-            for literal in literals {
-                plan_literal_edits(source, literal, bom_bytes, rules, edits);
-            }
+        if collect_docstring_literals(expression, source, bom_bytes, &mut literals) {
+            plan_docstring_prose_edits(source, &literals, bom_bytes, rules, edits);
         }
     }
 
@@ -121,35 +117,6 @@ fn is_qualifying_string(node: Node<'_>, source: &str, bom_bytes: usize) -> bool 
     )
 }
 
-fn docstring_contains_protected_markup(
-    source: &str,
-    literals: &[Node<'_>],
-    bom_bytes: usize,
-) -> bool {
-    let mut raw_content = String::new();
-    for literal in literals {
-        for content in string_content_nodes(*literal) {
-            let range = (content.start_byte() + bom_bytes)..(content.end_byte() + bom_bytes);
-            raw_content.push_str(&source[range]);
-        }
-    }
-    raw_content.contains('`')
-        || raw_content.contains("://")
-        || raw_content.contains("mailto:")
-        || raw_content.contains("www.")
-        || raw_content.contains('[')
-        || raw_content.contains(']')
-        || raw_content.contains("::")
-        || raw_content.split(['\r', '\n']).any(|line| {
-            let line = line.trim_start();
-            line.starts_with("~~~")
-                || line.starts_with("```")
-                || line.starts_with(">>>")
-                || line.starts_with("...")
-                || line.starts_with(".. ")
-        })
-}
-
 fn string_content_nodes(node: Node<'_>) -> Vec<Node<'_>> {
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
@@ -157,51 +124,151 @@ fn string_content_nodes(node: Node<'_>) -> Vec<Node<'_>> {
         .collect()
 }
 
-fn plan_literal_edits(
+fn plan_docstring_prose_edits(
     source: &str,
-    literal: Node<'_>,
+    literals: &[Node<'_>],
     bom_bytes: usize,
     rules: &SpacingRules,
     edits: &mut Vec<TextEdit>,
 ) {
-    for content in string_content_nodes(literal) {
-        let mut escape_ranges = Vec::new();
-        collect_escape_ranges(content, &mut escape_ranges);
-        escape_ranges.sort_by_key(|range| range.start_byte());
-
-        let content_start = content.start_byte();
-        let content_end = content.end_byte();
-        let mut safe_start = content_start;
-        for escape in escape_ranges {
-            if safe_start < escape.start_byte() {
-                plan_literal_text_edits(
+    let mut prose = String::new();
+    let mut segments = Vec::new();
+    let mut ambiguous = false;
+    'literals: for literal in literals {
+        let spelling = &source[literal.start_byte() + bom_bytes..literal.end_byte() + bom_bytes];
+        let raw = spelling.starts_with(['r', 'R']);
+        for content in string_content_nodes(*literal) {
+            let mut escapes = Vec::new();
+            if raw {
+                collect_raw_escape_ranges(
                     source,
-                    safe_start + bom_bytes..escape.start_byte() + bom_bytes,
-                    rules,
-                    edits,
+                    content.start_byte() + bom_bytes..content.end_byte() + bom_bytes,
+                    &mut escapes,
                 );
+            } else {
+                collect_escape_ranges(content, bom_bytes, &mut escapes);
+                escapes.sort_by_key(|escape| escape.start);
             }
-            safe_start = escape.end_byte();
-        }
-        if safe_start < content_end {
-            plan_literal_text_edits(
+            let mut start = content.start_byte() + bom_bytes;
+            for escape in escapes {
+                append_segment(source, start..escape.start, &mut prose, &mut segments);
+                let spelling = &source[escape.clone()];
+                if !raw && ambiguous_escape(spelling) {
+                    ambiguous = true;
+                    break 'literals;
+                }
+                if !raw && spelling == "\\n" {
+                    prose.push('\n');
+                } else if !raw && spelling == "\\r" {
+                    prose.push('\r');
+                } else if !raw && matches!(spelling, "\\t" | "\\f" | "\\v") {
+                    prose.push('\t');
+                } else if !raw
+                    && spelling.starts_with(['\\'])
+                    && spelling[1..].starts_with(['\r', '\n'])
+                {
+                    // A physical line continuation contributes no docstring character.
+                } else {
+                    prose.push_str(spelling);
+                }
+                start = escape.end;
+            }
+            append_segment(
                 source,
-                safe_start + bom_bytes..content_end + bom_bytes,
-                rules,
-                edits,
+                start..content.end_byte() + bom_bytes,
+                &mut prose,
+                &mut segments,
             );
+        }
+    }
+
+    if ambiguous && literals.len() > 1 {
+        return;
+    }
+
+    for safe in safe_prose_ranges(&prose) {
+        for (logical, original_start) in &segments {
+            let start = safe.start.max(logical.start);
+            let end = safe.end.min(logical.end);
+            if start < end {
+                let original = original_start + start - logical.start;
+                plan_literal_text_edits(source, original..original + end - start, rules, edits);
+            }
         }
     }
 }
 
-fn collect_escape_ranges<'tree>(node: Node<'tree>, ranges: &mut Vec<Node<'tree>>) {
+fn ambiguous_escape(spelling: &str) -> bool {
+    matches!(
+        spelling.as_bytes().get(1),
+        Some(b'x' | b'u' | b'U' | b'N' | b'0'..=b'7' | b'\\')
+    )
+}
+
+fn append_segment(
+    source: &str,
+    range: Range<usize>,
+    prose: &mut String,
+    segments: &mut Vec<(Range<usize>, usize)>,
+) {
+    if !range.is_empty() {
+        let start = prose.len();
+        prose.push_str(&source[range.clone()]);
+        segments.push((start..prose.len(), range.start));
+    }
+}
+
+fn collect_escape_ranges(node: Node<'_>, bom_bytes: usize, ranges: &mut Vec<Range<usize>>) {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "escape_sequence" {
-            ranges.push(child);
+            ranges.push(child.start_byte() + bom_bytes..child.end_byte() + bom_bytes);
         } else {
-            collect_escape_ranges(child, ranges);
+            collect_escape_ranges(child, bom_bytes, ranges);
         }
+    }
+}
+
+fn collect_raw_escape_ranges(source: &str, range: Range<usize>, ranges: &mut Vec<Range<usize>>) {
+    let mut cursor = range.start;
+    while cursor < range.end {
+        if source.as_bytes()[cursor] != b'\\' {
+            cursor += source[cursor..].chars().next().unwrap().len_utf8();
+            continue;
+        }
+        let start = cursor;
+        cursor += 1;
+        if cursor < range.end {
+            let kind = source.as_bytes()[cursor];
+            cursor += source[cursor..].chars().next().unwrap().len_utf8();
+            let digits = match kind {
+                b'x' => 2,
+                b'u' => 4,
+                b'U' => 8,
+                b'0'..=b'7' => 2,
+                _ => 0,
+            };
+            for _ in 0..digits {
+                if cursor < range.end
+                    && if matches!(kind, b'0'..=b'7') {
+                        matches!(source.as_bytes()[cursor], b'0'..=b'7')
+                    } else {
+                        source.as_bytes()[cursor].is_ascii_hexdigit()
+                    }
+                {
+                    cursor += 1;
+                } else {
+                    break;
+                }
+            }
+            if kind == b'N'
+                && source.as_bytes().get(cursor) == Some(&b'{')
+                && let Some(end) = source[cursor..range.end].find('}')
+            {
+                cursor += end + 1;
+            }
+        }
+        ranges.push(start..cursor);
     }
 }
 
