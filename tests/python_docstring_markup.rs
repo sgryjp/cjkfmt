@@ -1,43 +1,16 @@
-use std::{
-    io::Write,
-    process::{Command, Output, Stdio},
-};
+mod support;
 
-use tempfile::tempdir;
+use std::process::Output;
 
 fn run_cjkfmt(command: &str, input: &str) -> Output {
     run_with_options(command, input, &[])
 }
 
 fn run_with_options(command: &str, input: &str, options: &[&str]) -> Output {
-    let directory = tempdir().expect("temporary working directory should be created");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cjkfmt"))
-        .args([
-            "--color",
-            "never",
-            "--spacing-alphabets",
-            "require",
-            "--max-width",
-            "1000",
-        ])
-        .args(options)
-        .args([command, "--language", "python"])
-        .current_dir(directory.path())
-        .env_clear()
-        .env("HOME", directory.path())
-        .env("XDG_CONFIG_HOME", directory.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("cjkfmt should start");
-    child
-        .stdin
-        .take()
-        .expect("stdin should be piped")
-        .write_all(input.as_bytes())
-        .expect("input should be written");
-    child.wait_with_output().expect("cjkfmt should finish")
+    let mut args = vec!["--spacing-alphabets", "require", "--max-width", "1000"];
+    args.extend_from_slice(options);
+    args.extend([command, "--language", "python"]);
+    support::run_cjkfmt(&args, input)
 }
 
 #[test]
@@ -218,6 +191,55 @@ fn escaped_indentation_before_a_doctest_still_protects_its_output() {
     let output = run_cjkfmt("format", source);
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(output.stdout, expected.as_bytes());
+}
+
+#[test]
+fn safe_prose_on_both_sides_of_inert_unicode_escapes_is_formatted() {
+    for (source, expected, diagnostics) in [
+        (
+            r#""""前漢A \u4e00 後漢A""""#,
+            r#""""前漢 A \u4e00 後漢 A""""#,
+            "<stdin>:1:6: W002 Possible spacing position found\n<stdin>:1:17: W002 Possible spacing position found\n",
+        ),
+        (
+            r#"("前漢A \u4e00 後漢A" "次漢A")"#,
+            r#"("前漢 A \u4e00 後漢 A" "次漢 A")"#,
+            "<stdin>:1:5: W002 Possible spacing position found\n<stdin>:1:16: W002 Possible spacing position found\n<stdin>:1:22: W002 Possible spacing position found\n",
+        ),
+    ] {
+        let formatted = run_cjkfmt("format", source);
+        assert_eq!(formatted.status.code(), Some(0));
+        assert_eq!(formatted.stdout, expected.as_bytes());
+        let checked = run_cjkfmt("check", source);
+        assert_eq!(checked.status.code(), Some(1));
+        assert_eq!(checked.stdout, diagnostics.as_bytes());
+        assert_eq!(run_cjkfmt("format", expected).stdout, expected.as_bytes());
+    }
+}
+
+#[test]
+fn safe_prose_around_numeric_alphanumeric_escapes_is_formatted() {
+    let source = r#"("前漢A \x41 後漢A \101 次漢A" "最後漢A")"#;
+    let expected = r#"("前漢 A \x41 後漢 A \101 次漢 A" "最後漢 A")"#;
+    assert_eq!(run_cjkfmt("format", source).stdout, expected.as_bytes());
+    assert_eq!(run_cjkfmt("check", source).status.code(), Some(1));
+    assert_eq!(run_cjkfmt("format", expected).stdout, expected.as_bytes());
+}
+
+#[test]
+fn numeric_whitespace_escapes_preserve_doctests_and_allow_prose_afterward() {
+    let source = r#"("前漢A\x0a>>> print('漢A')\x0aoutput漢A\x0a\x0a後漢A" "次漢A")"#;
+    let expected = r#"("前漢 A\x0a>>> print('漢A')\x0aoutput漢A\x0a\x0a後漢 A" "次漢 A")"#;
+    assert_eq!(run_cjkfmt("format", source).stdout, expected.as_bytes());
+    assert_eq!(run_cjkfmt("format", expected).stdout, expected.as_bytes());
+}
+
+#[test]
+fn numeric_escapes_in_url_schemes_keep_destinations_protected() {
+    let source = r#""\x68ttps://example.test/漢A 後漢A""#;
+    let expected = r#""\x68ttps://example.test/漢A 後漢 A""#;
+    assert_eq!(run_cjkfmt("format", source).stdout, expected.as_bytes());
+    assert_eq!(run_cjkfmt("format", expected).stdout, expected.as_bytes());
 }
 
 #[test]

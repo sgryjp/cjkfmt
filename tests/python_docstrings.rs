@@ -1,35 +1,16 @@
-use std::{
-    io::Write,
-    process::{Command, Output, Stdio},
-};
+mod support;
+
+use std::process::{Command, Output};
 
 use tempfile::tempdir;
 
 fn run_cjkfmt(args: &[&str], input: &str) -> Output {
-    let directory = tempdir().expect("temporary working directory should be created");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_cjkfmt"));
-    command.args(["--color", "never"]);
+    let mut options = Vec::new();
     if !args.contains(&"--spacing-alphabets") {
-        command.args(["--spacing-alphabets", "require"]);
+        options.extend(["--spacing-alphabets", "require"]);
     }
-    let mut child = command
-        .args(args)
-        .current_dir(directory.path())
-        .env_clear()
-        .env("HOME", directory.path())
-        .env("XDG_CONFIG_HOME", directory.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("cjkfmt should start");
-    child
-        .stdin
-        .take()
-        .expect("stdin should be piped")
-        .write_all(input.as_bytes())
-        .expect("input should be written");
-    child.wait_with_output().expect("cjkfmt should finish")
+    options.extend_from_slice(args);
+    support::run_cjkfmt(&options, input)
 }
 
 #[test]

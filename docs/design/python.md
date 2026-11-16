@@ -53,9 +53,11 @@ strings, including optional `u` and `r` prefixes, are supported. Markup can span
 concatenated literals, but spacing decisions do not cross literal boundaries or escape sequences.
 Literal spelling, escapes, quotes, prefixes, indentation, and line endings are preserved. Escaped
 newlines and indentation escapes in non-raw strings are recognized for identifying block
-boundaries. Numeric, named Unicode, and escaped-backslash sequences can obscure markup; cjkfmt
-leaves the remainder of
-such a docstring unchanged, or skips the whole docstring when it contains concatenated literals.
+boundaries. Numeric escapes representing letters, digits, spaces, tabs, or line endings can be
+recognized without changing their source spelling. Other numeric, named Unicode, and
+escaped-backslash sequences can obscure markup;
+cjkfmt leaves the remainder of such a docstring unchanged, or skips the whole docstring when it
+contains concatenated literals.
 
 Byte strings, f-strings, binary expressions, ordinary strings, attribute docstrings, and additional
 docstrings are not formatted.
