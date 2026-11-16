@@ -36,12 +36,20 @@ comments and remain unchanged. A trailing comment is considered independently. C
 standalone comments with matching indentation form one region; blank lines, code, and indentation
 changes end that region.
 
-Until protected-markup support is implemented, cjkfmt conservatively skips an entire comment region
-when it sees common markup indicators such as backticks, URL or link syntax, code fences, reST
-literal/directive markers, or doctest prompts. This avoids partially changing marked examples split
-across consecutive comments. The initial detection is intentionally conservative, not a complete
-Markdown or reStructuredText parser. Unmarked code-like text and machine-directed comments are not
-reliably detected and may be formatted; explicitly mark examples to keep them unchanged.
+In consecutive standalone-comment regions, cjkfmt protects Markdown fenced code blocks (backtick
+or tilde fences), reStructuredText code and code-block directives, and indented literal blocks
+introduced by `::`, as well as doctest prompts, continuations, and
+output. Safe prose before and after a protected block remains eligible
+for spacing. If a block is incomplete or its end cannot be
+determined safely, the remainder of that comment region is left unchanged. Trailing comments are
+considered independently.
+
+Other recognizable markup, including inline backticks, URLs, and link syntax, causes cjkfmt to skip
+the remainder of the comment region from that line onward when it cannot determine a safe boundary.
+This is not a complete Markdown or reStructuredText parser. Unmarked code-like text and
+machine-directed comments are not reliably detected and may be formatted; explicitly mark code
+examples to keep them unchanged. cjkfmt does not maintain a blacklist of tool-specific comment
+directives.
 
 `check` derives W002 from the same validated spacing plan used by `format`, so reported locations
 refer to the original source. W001 checks physical lines independently of spacing and wrapping. A

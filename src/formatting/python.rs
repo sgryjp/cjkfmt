@@ -2,7 +2,10 @@
 
 use std::{borrow::Cow, ops::Range};
 
-use super::{BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, SpacingRules, TextEdit};
+use super::{
+    BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, SpacingRules, TextEdit,
+    python_comment_markup::protected_comment_lines,
+};
 use crate::{
     core::physical_source::PhysicalSource,
     parser::{Grammar, parse},
@@ -67,14 +70,22 @@ impl LanguageFormatPolicy for PythonFormatPolicy {
                 index += 1;
             }
             let group = &comments[group_start..index];
-            if group
+            let ranges = group
                 .iter()
-                .any(|comment| contains_protected_markup(text, &comment.range))
-            {
-                continue;
-            }
-            for comment in group {
-                plan_comment_edits(text, &comment.range, rules, &mut edits);
+                .map(|comment| comment.range.clone())
+                .collect::<Vec<_>>();
+            let protected = protected_comment_lines(text, &ranges);
+            let unsupported_markup_start =
+                group.iter().enumerate().find_map(|(group_index, comment)| {
+                    (!protected[group_index] && contains_protected_markup(text, &comment.range))
+                        .then_some(group_index)
+                });
+            for (group_index, (comment, protected)) in group.iter().zip(protected).enumerate() {
+                let follows_unsupported_markup =
+                    unsupported_markup_start.is_some_and(|start| group_index >= start);
+                if !protected && !follows_unsupported_markup {
+                    plan_comment_edits(text, &comment.range, rules, &mut edits);
+                }
             }
         }
         Ok(edits)

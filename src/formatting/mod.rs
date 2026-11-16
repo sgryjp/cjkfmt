@@ -7,6 +7,7 @@
 pub(crate) mod json;
 pub(crate) mod markdown;
 pub(crate) mod python;
+pub(crate) mod python_comment_markup;
 
 use std::ops::Range;
 
