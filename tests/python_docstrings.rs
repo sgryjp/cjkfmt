@@ -132,7 +132,7 @@ class AttributeString:
 }
 
 #[test]
-fn docstrings_with_possible_protected_markup_are_skipped_independently() {
+fn marked_examples_are_preserved_while_other_docstrings_are_formatted() {
     let source = r##""""module `code漢A` and https://example.test/漢A"""
 
 def safe():
