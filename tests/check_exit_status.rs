@@ -313,7 +313,7 @@ fn check_exits_two_when_configuration_is_invalid() {
 }
 
 #[test]
-fn format_and_check_infer_python_extensions_and_only_process_comments() {
+fn format_and_check_infer_python_extensions_and_format_comments_and_docstrings() {
     let source = "\"\"\"漢A\"\"\"\n# 漢A\nvalue = \"漢A\"  # 漢A\n";
     for filename in [
         "document.py",
@@ -332,7 +332,7 @@ fn format_and_check_infer_python_extensions_and_only_process_comments() {
         assert_eq!(formatted.status.code(), Some(0), "{filename}");
         assert_eq!(
             String::from_utf8(formatted.stdout).unwrap(),
-            "\"\"\"漢A\"\"\"\n# 漢 A\nvalue = \"漢A\"  # 漢 A\n",
+            "\"\"\"漢 A\"\"\"\n# 漢 A\nvalue = \"漢A\"  # 漢 A\n",
             "{filename}"
         );
         assert!(formatted.stderr.is_empty(), "{filename}");
@@ -347,7 +347,8 @@ fn format_and_check_infer_python_extensions_and_only_process_comments() {
         assert_eq!(
             String::from_utf8(checked.stdout).unwrap(),
             format!(
-                "{filename}:2:4: W002 Possible spacing position found\n\
+                "{filename}:1:5: W002 Possible spacing position found\n\
+                 {filename}:2:4: W002 Possible spacing position found\n\
                  {filename}:3:18: W002 Possible spacing position found\n"
             ),
             "{filename}"

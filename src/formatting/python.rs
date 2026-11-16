@@ -1,4 +1,4 @@
-//! The initial Python policy: spacing in safe comments only.
+//! Python spacing policy for syntax-recognized comments and actual docstrings.
 
 use std::{borrow::Cow, ops::Range};
 
@@ -70,6 +70,9 @@ impl LanguageFormatPolicy for PythonFormatPolicy {
             let group = &comments[group_start..index];
             plan_comment_region_edits(text, group, rules, &mut edits);
         }
+        edits.extend(super::python_docstring::plan_docstring_edits(
+            root, text, bom_bytes, rules,
+        ));
         Ok(edits)
     }
 

@@ -11,10 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added Python language selection for `.py`, `.pyi`, and `.pyw` files and safe comment spacing with
-  the existing rules. Python source layout and docstrings remain unchanged. Markdown fences,
-  reStructuredText code and literal blocks, and doctest examples in consecutive standalone comments
-  are protected while safe surrounding prose remains eligible. (#138, #141)
+- Added Python language selection for `.py`, `.pyi`, and `.pyw` files and spacing in safe comments
+  and actual docstrings with the existing rules.
+  Python source layout is preserved. Docstrings containing protected markup are skipped
+  conservatively; marked comment blocks protect examples while safe surrounding prose remains
+  eligible. (#138, #141, #142)
 
 ## v0.0.10 - 2026-11-06
 
