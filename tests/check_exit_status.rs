@@ -667,7 +667,7 @@ fn python_alphabet_and_digit_spacing_rules_remain_independent() {
 }
 
 #[test]
-fn python_comment_group_formats_safe_prose_before_protected_markup() {
+fn python_comment_group_formats_safe_prose_around_protected_markup() {
     let source = "# 漢A\n# ```python\n# print(\"漢A\")\n# ```\n# 漢A\n";
     let output = run_cjkfmt(
         &[
@@ -684,7 +684,7 @@ fn python_comment_group_formats_safe_prose_before_protected_markup() {
     assert_eq!(output.status.code(), Some(0));
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        "# 漢 A\n# ```python\n# print(\"漢A\")\n# ```\n# 漢A\n"
+        "# 漢 A\n# ```python\n# print(\"漢A\")\n# ```\n# 漢 A\n"
     );
 }
 
