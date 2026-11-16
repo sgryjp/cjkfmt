@@ -1,32 +1,6 @@
-use std::{
-    io::Write,
-    process::{Command, Output, Stdio},
-};
+mod support;
 
-use tempfile::tempdir;
-
-fn run_cjkfmt(args: &[&str], input: &str) -> Output {
-    let directory = tempdir().expect("temporary working directory should be created");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cjkfmt"))
-        .args(["--color", "never"])
-        .args(args)
-        .current_dir(directory.path())
-        .env_clear()
-        .env("HOME", directory.path())
-        .env("XDG_CONFIG_HOME", directory.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("cjkfmt should start");
-    child
-        .stdin
-        .take()
-        .expect("stdin should be piped")
-        .write_all(input.as_bytes())
-        .expect("stdin should be written");
-    child.wait_with_output().expect("cjkfmt should finish")
-}
+use support::run_cjkfmt;
 
 fn format_python(source: &str) -> String {
     let formatted = run_cjkfmt(
@@ -84,6 +58,19 @@ fn formats_prose_around_fenced_examples_and_check_reports_only_safe_lines() {
 }
 
 #[test]
+fn form_feed_indented_standalone_comments_protect_fenced_examples() {
+    let source = "\x0c# 漢A\n\x0c# ```python\n\x0c# print(\"漢A\")\n\x0c# ```\n\x0c# 漢B\n";
+    let expected = "\x0c# 漢 A\n\x0c# ```python\n\x0c# print(\"漢A\")\n\x0c# ```\n\x0c# 漢 B\n";
+    assert_eq!(format_python(source), expected);
+    assert_eq!(format_python(expected), expected);
+    assert_eq!(
+        check_python(source),
+        "<stdin>:1:5: W002 Possible spacing position found\n\
+         <stdin>:5:5: W002 Possible spacing position found\n"
+    );
+}
+
+#[test]
 fn inline_markup_after_a_fence_does_not_block_safe_surrounding_prose() {
     let source = "# ```python\n# print(\"漢A\")\n# ```\n# 漢A `漢A` 漢A\n";
     assert_eq!(
@@ -106,6 +93,20 @@ fn protects_indented_content_of_restructuredtext_code_directives() {
             "directive={directive}"
         );
     }
+}
+
+#[test]
+fn restructuredtext_blocks_use_tab_expanded_indentation() {
+    let source =
+        "#     .. code-block:: python\n#\n#         print(\"漢A\")\n# \tprint(\"漢B\")\n# 漢C\n";
+    let expected =
+        "#     .. code-block:: python\n#\n#         print(\"漢A\")\n# \tprint(\"漢B\")\n# 漢 C\n";
+    assert_eq!(format_python(source), expected);
+    assert_eq!(format_python(expected), expected);
+    assert_eq!(
+        check_python(source),
+        "<stdin>:5:4: W002 Possible spacing position found\n"
+    );
 }
 
 #[test]

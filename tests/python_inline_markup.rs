@@ -1,38 +1,18 @@
-use std::{
-    io::Write,
-    process::{Command, Output, Stdio},
-};
+mod support;
 
-use tempfile::tempdir;
+use std::process::Output;
 
 fn run_cjkfmt(command: &str, input: &str) -> Output {
-    let directory = tempdir().expect("temporary working directory should be created");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cjkfmt"))
-        .args([
-            "--color",
-            "never",
+    support::run_cjkfmt(
+        &[
             "--spacing-alphabets",
             "require",
             command,
             "--language",
             "python",
-        ])
-        .current_dir(directory.path())
-        .env_clear()
-        .env("HOME", directory.path())
-        .env("XDG_CONFIG_HOME", directory.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("cjkfmt should start");
-    child
-        .stdin
-        .take()
-        .expect("stdin should be piped")
-        .write_all(input.as_bytes())
-        .expect("input should be written");
-    child.wait_with_output().expect("cjkfmt should finish")
+        ],
+        input,
+    )
 }
 
 #[test]

@@ -493,6 +493,57 @@ fn python_rejects_a_bom_conflicting_with_the_source_encoding_declaration() {
 }
 
 #[test]
+fn python_rejects_bom_conflicts_with_utf8_codec_aliases() {
+    for encoding in ["utf8", "u8", "utf", "cp65001"] {
+        let source = format!("\u{feff}# coding: {encoding}\n# 漢A\n");
+        for command in ["format", "check"] {
+            let output = run_cjkfmt_with_input(
+                &[
+                    "--spacing-alphabets",
+                    "require",
+                    command,
+                    "--language",
+                    "python",
+                ],
+                source.as_bytes(),
+                None,
+                &[],
+            );
+            let expected_status = if command == "format" { 1 } else { 2 };
+            assert_eq!(
+                output.status.code(),
+                Some(expected_status),
+                "{encoding} {command}"
+            );
+            assert!(output.stdout.is_empty(), "{encoding} {command}");
+            assert!(String::from_utf8_lossy(&output.stderr).contains("BOM conflicts"));
+        }
+    }
+}
+
+#[test]
+fn python_accepts_compatible_bom_encoding_declarations() {
+    for encoding in ["utf-8", "UTF_8", "utf-8-sig"] {
+        let source = format!("\u{feff}# coding: {encoding}\n# 漢A\n");
+        let expected = format!("\u{feff}# coding: {encoding}\n# 漢 A\n");
+        let output = run_cjkfmt(
+            &[
+                "--spacing-alphabets",
+                "require",
+                "format",
+                "--language",
+                "python",
+            ],
+            &source,
+            None,
+        );
+        assert_eq!(output.status.code(), Some(0), "{encoding}");
+        assert_eq!(output.stdout, expected.as_bytes(), "{encoding}");
+        assert!(output.stderr.is_empty());
+    }
+}
+
+#[test]
 fn check_python_spacing_positions_ignore_the_utf8_bom_signature() {
     let output = run_cjkfmt(
         &[

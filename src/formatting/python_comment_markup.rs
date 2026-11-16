@@ -84,8 +84,7 @@ fn prose_lines(prose: &str) -> Vec<(Range<usize>, &str)> {
 }
 
 fn opening_fence(line: &str) -> Option<(char, usize)> {
-    let indentation = indentation(line);
-    let trimmed = &line[indentation..];
+    let trimmed = line.trim_start_matches([' ', '\t']);
     let marker = trimmed.chars().next()?;
     if !matches!(marker, '`' | '~') {
         return None;
@@ -98,8 +97,7 @@ fn opening_fence(line: &str) -> Option<(char, usize)> {
 }
 
 fn closing_fence(line: &str, marker: char, minimum_length: usize) -> bool {
-    let indentation = indentation(line);
-    let trimmed = &line[indentation..];
+    let trimmed = line.trim_start_matches([' ', '\t']);
     let length = trimmed
         .chars()
         .take_while(|character| *character == marker)
@@ -112,7 +110,7 @@ fn closing_fence(line: &str, marker: char, minimum_length: usize) -> bool {
 
 fn restructuredtext_directive_indentation(line: &str) -> Option<usize> {
     let indentation = indentation(line);
-    let directive = line[indentation..].strip_prefix(".. ")?;
+    let directive = line.trim_start_matches([' ', '\t']).strip_prefix(".. ")?;
     let separator = directive.find("::")?;
     let name = directive[..separator].trim_end();
     (!name.is_empty()
@@ -158,5 +156,11 @@ fn doctest_end(lines: &[(Range<usize>, &str)], start: usize) -> usize {
 fn indentation(line: &str) -> usize {
     line.bytes()
         .take_while(|byte| *byte == b' ' || *byte == b'\t')
-        .count()
+        .fold(0, |column, byte| {
+            if byte == b'\t' {
+                (column / 8 + 1) * 8
+            } else {
+                column + 1
+            }
+        })
 }

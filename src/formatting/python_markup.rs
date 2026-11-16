@@ -1,6 +1,23 @@
 use std::ops::Range;
 
-use super::python_comment_markup::protected_prose_ranges;
+use super::{SpacingRules, TextEdit, python_comment_markup::protected_prose_ranges};
+use crate::spacing::spacing_edits;
+
+pub(crate) fn plan_source_spacing_edits(
+    source: &str,
+    range: Range<usize>,
+    rules: &SpacingRules,
+    edits: &mut Vec<TextEdit>,
+) {
+    edits.extend(
+        spacing_edits(rules, &source[range.clone()])
+            .into_iter()
+            .map(|edit| TextEdit {
+                range: (range.start + edit.range.start)..(range.start + edit.range.end),
+                replacement: edit.replacement,
+            }),
+    );
+}
 
 pub(crate) fn safe_comment_body_ranges(source: &str, bodies: &[Range<usize>]) -> Vec<Range<usize>> {
     let mut region = String::new();

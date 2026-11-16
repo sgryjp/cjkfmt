@@ -4,12 +4,11 @@ use std::{borrow::Cow, ops::Range};
 
 use super::{
     BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, SpacingRules, TextEdit,
-    python_markup::safe_comment_body_ranges,
+    python_markup::{plan_source_spacing_edits, safe_comment_body_ranges},
 };
 use crate::{
     core::physical_source::PhysicalSource,
     parser::{Grammar, parse},
-    spacing::spacing_edits,
 };
 use tree_sitter::Node;
 
@@ -100,13 +99,11 @@ fn collect_comments(root: Node<'_>, source: &PhysicalSource<'_>, bom_bytes: usiz
             }
             let prefix = &source.text()[line.start_offset()..marker_offset];
             let standalone = prefix
+                .strip_prefix('\u{feff}')
+                .filter(|_| line.index() == 0)
+                .unwrap_or(prefix)
                 .chars()
-                .all(|character| matches!(character, ' ' | '\t'))
-                || (line.index() == 0
-                    && prefix.strip_prefix('\u{feff}').is_some_and(|rest| {
-                        rest.chars()
-                            .all(|character| matches!(character, ' ' | '\t'))
-                    }));
+                .all(|character| matches!(character, ' ' | '\t' | '\x0c'));
             Some(Comment {
                 range,
                 row: node.start_position().row,
@@ -173,11 +170,7 @@ fn plan_comment_region_edits(
         })
         .collect::<Vec<_>>();
     for range in safe_comment_body_ranges(source, &bodies) {
-        let body = &source[range.clone()];
-        edits.extend(spacing_edits(rules, body).into_iter().map(|edit| TextEdit {
-            range: (range.start + edit.range.start)..(range.start + edit.range.end),
-            replacement: edit.replacement,
-        }));
+        plan_source_spacing_edits(source, range, rules, edits);
     }
 }
 
@@ -209,10 +202,15 @@ fn validate_python_encoding(source: &str) -> Result<(), LanguageFormatError> {
         .filter(|character| !matches!(character, '-' | '_' | '.'))
         .flat_map(char::to_lowercase)
         .collect::<String>();
-    if matches!(
+    let is_utf8 = matches!(
         normalized.as_str(),
         "utf8" | "utf8sig" | "u8" | "utf" | "cp65001"
-    ) {
+    );
+    let bom_compatible = matches!(
+        encoding.to_ascii_lowercase().replace('_', "-").as_str(),
+        "utf-8" | "utf-8-sig"
+    );
+    if is_utf8 && (!has_bom || bom_compatible) {
         return Ok(());
     }
 

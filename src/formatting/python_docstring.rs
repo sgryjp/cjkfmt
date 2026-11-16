@@ -4,8 +4,10 @@ use std::ops::Range;
 
 use tree_sitter::Node;
 
-use super::{SpacingRules, TextEdit, python_markup::safe_prose_ranges};
-use crate::spacing::spacing_edits;
+use super::{
+    SpacingRules, TextEdit,
+    python_markup::{plan_source_spacing_edits, safe_prose_ranges},
+};
 
 pub(crate) fn plan_docstring_edits(
     root: Node<'_>,
@@ -153,11 +155,15 @@ fn plan_docstring_prose_edits(
             for escape in escapes {
                 append_segment(source, start..escape.start, &mut prose, &mut segments);
                 let spelling = &source[escape.clone()];
-                if !raw && ambiguous_escape(spelling) {
+                if let Some(character) = (!raw)
+                    .then(|| recognizable_numeric_escape(spelling))
+                    .flatten()
+                {
+                    prose.push(character);
+                } else if !raw && ambiguous_escape(spelling) {
                     ambiguous = true;
                     break 'literals;
-                }
-                if !raw && spelling == "\\n" {
+                } else if !raw && spelling == "\\n" {
                     prose.push('\n');
                 } else if !raw && spelling == "\\r" {
                     prose.push('\r');
@@ -192,10 +198,22 @@ fn plan_docstring_prose_edits(
             let end = safe.end.min(logical.end);
             if start < end {
                 let original = original_start + start - logical.start;
-                plan_literal_text_edits(source, original..original + end - start, rules, edits);
+                plan_source_spacing_edits(source, original..original + end - start, rules, edits);
             }
         }
     }
+}
+
+fn recognizable_numeric_escape(spelling: &str) -> Option<char> {
+    let tail = spelling.strip_prefix('\\')?;
+    let (digits, radix) = match tail.as_bytes().first()? {
+        b'x' | b'u' | b'U' => (&tail[1..], 16),
+        b'0'..=b'7' => (tail, 8),
+        _ => return None,
+    };
+    let character = char::from_u32(u32::from_str_radix(digits, radix).ok()?)?;
+    (character.is_alphanumeric() || matches!(character, ' ' | '\t' | '\r' | '\n'))
+        .then_some(character)
 }
 
 fn ambiguous_escape(spelling: &str) -> bool {
@@ -270,17 +288,4 @@ fn collect_raw_escape_ranges(source: &str, range: Range<usize>, ranges: &mut Vec
         }
         ranges.push(start..cursor);
     }
-}
-
-fn plan_literal_text_edits(
-    source: &str,
-    range: Range<usize>,
-    rules: &SpacingRules,
-    edits: &mut Vec<TextEdit>,
-) {
-    let text = &source[range.clone()];
-    edits.extend(spacing_edits(rules, text).into_iter().map(|edit| TextEdit {
-        range: (range.start + edit.range.start)..(range.start + edit.range.end),
-        replacement: edit.replacement,
-    }));
 }
