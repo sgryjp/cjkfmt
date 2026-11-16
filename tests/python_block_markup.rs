@@ -84,6 +84,15 @@ fn formats_prose_around_fenced_examples_and_check_reports_only_safe_lines() {
 }
 
 #[test]
+fn inline_markup_after_a_fence_does_not_block_safe_surrounding_prose() {
+    let source = "# ```python\n# print(\"漢A\")\n# ```\n# 漢A `漢A` 漢A\n";
+    assert_eq!(
+        format_python(source),
+        "# ```python\n# print(\"漢A\")\n# ```\n# 漢 A `漢A` 漢 A\n"
+    );
+}
+
+#[test]
 fn protects_indented_content_of_restructuredtext_code_directives() {
     for directive in ["code", "code-block"] {
         let source = format!("# 漢A\n# .. {directive}:: python\n#\n#     print(\"漢A\")\n# 漢A\n");

@@ -4,7 +4,7 @@ use std::{borrow::Cow, ops::Range};
 
 use super::{
     BreakOpportunity, LanguageFormatError, LanguageFormatPolicy, SpacingRules, TextEdit,
-    python_comment_markup::protected_comment_lines,
+    python_markup::safe_comment_body_ranges,
 };
 use crate::{
     core::physical_source::PhysicalSource,
@@ -53,9 +53,7 @@ impl LanguageFormatPolicy for PythonFormatPolicy {
         while index < comments.len() {
             let comment = &comments[index];
             if !comment.standalone {
-                if !contains_protected_markup(text, &comment.range) {
-                    plan_comment_edits(text, &comment.range, rules, &mut edits);
-                }
+                plan_comment_region_edits(text, std::slice::from_ref(comment), rules, &mut edits);
                 index += 1;
                 continue;
             }
@@ -70,23 +68,7 @@ impl LanguageFormatPolicy for PythonFormatPolicy {
                 index += 1;
             }
             let group = &comments[group_start..index];
-            let ranges = group
-                .iter()
-                .map(|comment| comment.range.clone())
-                .collect::<Vec<_>>();
-            let protected = protected_comment_lines(text, &ranges);
-            let unsupported_markup_start =
-                group.iter().enumerate().find_map(|(group_index, comment)| {
-                    (!protected[group_index] && contains_protected_markup(text, &comment.range))
-                        .then_some(group_index)
-                });
-            for (group_index, (comment, protected)) in group.iter().zip(protected).enumerate() {
-                let follows_unsupported_markup =
-                    unsupported_markup_start.is_some_and(|start| group_index >= start);
-                if !protected && !follows_unsupported_markup {
-                    plan_comment_edits(text, &comment.range, rules, &mut edits);
-                }
-            }
+            plan_comment_region_edits(text, group, rules, &mut edits);
         }
         Ok(edits)
     }
@@ -170,41 +152,30 @@ fn normalize_bare_carriage_returns(source: &str) -> Cow<'_, str> {
     Cow::Owned(normalized)
 }
 
-fn plan_comment_edits(
+fn plan_comment_region_edits(
     source: &str,
-    range: &Range<usize>,
+    comments: &[Comment],
     rules: &SpacingRules,
     edits: &mut Vec<TextEdit>,
 ) {
-    let Some(body_range) = range
-        .start
-        .checked_add(1)
-        .filter(|start| *start <= range.end)
-    else {
-        return;
-    };
-    let body = &source[body_range..range.end];
-    edits.extend(spacing_edits(rules, body).into_iter().map(|edit| TextEdit {
-        range: (body_range + edit.range.start)..(body_range + edit.range.end),
-        replacement: edit.replacement,
-    }));
-}
-
-fn contains_protected_markup(source: &str, range: &Range<usize>) -> bool {
-    let text = &source[range.clone()];
-    let trimmed = text.trim_start_matches('#').trim();
-    text.contains('`')
-        || text.contains("://")
-        || text.contains("mailto:")
-        || text.contains("www.")
-        || text.contains('[')
-        || text.contains(']')
-        || text.contains("::")
-        || trimmed.starts_with("~~~")
-        || trimmed.starts_with("```")
-        || trimmed.starts_with(">>>")
-        || trimmed.starts_with("...")
-        || trimmed.starts_with(".. ")
+    let bodies = comments
+        .iter()
+        .filter_map(|comment| {
+            comment
+                .range
+                .start
+                .checked_add(1)
+                .filter(|start| *start <= comment.range.end)
+                .map(|start| start..comment.range.end)
+        })
+        .collect::<Vec<_>>();
+    for range in safe_comment_body_ranges(source, &bodies) {
+        let body = &source[range.clone()];
+        edits.extend(spacing_edits(rules, body).into_iter().map(|edit| TextEdit {
+            range: (range.start + edit.range.start)..(range.start + edit.range.end),
+            replacement: edit.replacement,
+        }));
+    }
 }
 
 fn validate_python_encoding(source: &str) -> Result<(), LanguageFormatError> {

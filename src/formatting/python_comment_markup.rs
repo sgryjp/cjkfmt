@@ -1,41 +1,54 @@
 use std::ops::Range;
 
-pub(crate) fn protected_comment_lines(source: &str, ranges: &[Range<usize>]) -> Vec<bool> {
-    let lines = ranges
-        .iter()
-        .map(|range| comment_content(&source[range.clone()]))
-        .collect::<Vec<_>>();
-    let mut protected = vec![false; lines.len()];
+pub(crate) fn protected_prose_ranges(prose: &str) -> Vec<Range<usize>> {
+    let lines = prose_lines(prose);
+    let mut protected = Vec::new();
     let mut index = 0;
 
     while index < lines.len() {
-        if let Some((marker, length)) = opening_fence(lines[index]) {
-            protected[index] = true;
+        if let Some((marker, minimum_length)) = opening_fence(lines[index].1) {
+            let start = lines[index].0.start;
             index += 1;
-            while index < lines.len() {
-                protected[index] = true;
-                let closes = closing_fence(lines[index], marker, length);
+            while index < lines.len() && !closing_fence(lines[index].1, marker, minimum_length) {
                 index += 1;
-                if closes {
-                    break;
-                }
             }
+            let end = if index < lines.len() {
+                index += 1;
+                lines[index - 1].0.end
+            } else {
+                prose.len()
+            };
+            protected.push(start..end);
             continue;
         }
 
-        if let Some(indentation) = restructuredtext_directive_indentation(lines[index]) {
-            index = protect_indented_block(&lines, &mut protected, index, indentation);
+        if let Some(block_indentation) = restructuredtext_directive_indentation(lines[index].1) {
+            let start = lines[index].0.start;
+            index = indented_block_end(&lines, index, block_indentation);
+            let end = lines
+                .get(index.saturating_sub(1))
+                .map_or(prose.len(), |line| line.0.end);
+            protected.push(start..end);
             continue;
         }
 
-        if lines[index].trim_end().ends_with("::") {
-            index =
-                protect_indented_block(&lines, &mut protected, index, indentation(lines[index]));
+        if lines[index].1.trim_end().ends_with("::") {
+            let start = lines[index].0.start;
+            index = indented_block_end(&lines, index, indentation(lines[index].1));
+            let end = lines
+                .get(index.saturating_sub(1))
+                .map_or(prose.len(), |line| line.0.end);
+            protected.push(start..end);
             continue;
         }
 
-        if lines[index].trim_start().starts_with(">>>") {
-            index = protect_doctest(&lines, &mut protected, index);
+        if lines[index].1.trim_start().starts_with(">>>") {
+            let start = lines[index].0.start;
+            index = doctest_end(&lines, index);
+            let end = lines
+                .get(index.saturating_sub(1))
+                .map_or(prose.len(), |line| line.0.end);
+            protected.push(start..end);
             continue;
         }
 
@@ -45,11 +58,29 @@ pub(crate) fn protected_comment_lines(source: &str, ranges: &[Range<usize>]) -> 
     protected
 }
 
-fn comment_content(comment: &str) -> &str {
-    let body = comment.strip_prefix('#').unwrap_or(comment);
-    body.strip_prefix(' ')
-        .unwrap_or(body)
-        .trim_end_matches(['\r', '\n'])
+fn prose_lines(prose: &str) -> Vec<(Range<usize>, &str)> {
+    let bytes = prose.as_bytes();
+    let mut lines = Vec::new();
+    let mut start = 0;
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        if matches!(bytes[cursor], b'\r' | b'\n') {
+            let content_end = cursor;
+            if bytes[cursor] == b'\r' && bytes.get(cursor + 1) == Some(&b'\n') {
+                cursor += 1;
+            }
+            cursor += 1;
+            lines.push((start..cursor, &prose[start..content_end]));
+            start = cursor;
+        } else {
+            cursor += 1;
+        }
+    }
+    if start < prose.len() {
+        lines.push((start..prose.len(), &prose[start..]));
+    }
+    lines
 }
 
 fn opening_fence(line: &str) -> Option<(char, usize)> {
@@ -91,45 +122,33 @@ fn restructuredtext_directive_indentation(line: &str) -> Option<usize> {
     .then_some(indentation)
 }
 
-fn protect_indented_block(
-    lines: &[&str],
-    protected: &mut [bool],
-    directive_index: usize,
-    directive_indentation: usize,
-) -> usize {
-    protected[directive_index] = true;
-    let mut index = directive_index + 1;
-    while index < lines.len() && lines[index].trim().is_empty() {
-        protected[index] = true;
+fn indented_block_end(lines: &[(Range<usize>, &str)], start: usize, base_indent: usize) -> usize {
+    let mut index = start + 1;
+    while index < lines.len() && lines[index].1.trim().is_empty() {
         index += 1;
     }
-    if index == lines.len() || indentation(lines[index]) <= directive_indentation {
-        protected[directive_index..].fill(true);
+    if index == lines.len() || indentation(lines[index].1) <= base_indent {
         return lines.len();
     }
 
     while index < lines.len() {
-        if lines[index].trim().is_empty() {
-            protected[index] = true;
+        if lines[index].1.trim().is_empty() {
             index += 1;
             continue;
         }
-        if indentation(lines[index]) <= directive_indentation {
+        if indentation(lines[index].1) <= base_indent {
             break;
         }
-        protected[index] = true;
         index += 1;
     }
-
     index
 }
 
-fn protect_doctest(lines: &[&str], protected: &mut [bool], start: usize) -> usize {
+fn doctest_end(lines: &[(Range<usize>, &str)], start: usize) -> usize {
     let mut index = start;
     while index < lines.len() {
-        protected[index] = true;
         index += 1;
-        if lines[index - 1].trim().is_empty() {
+        if lines[index - 1].1.trim().is_empty() {
             break;
         }
     }
