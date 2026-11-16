@@ -2,7 +2,9 @@ use tree_sitter::{Parser, Tree};
 
 use super::Grammar;
 use super::errors::CjkfmtParseError;
-use super::ffi::{tree_sitter_json, tree_sitter_markdown, tree_sitter_markdown_inline};
+use super::ffi::{
+    tree_sitter_json, tree_sitter_markdown, tree_sitter_markdown_inline, tree_sitter_python,
+};
 
 /// Parses the given content string using the specified grammar and returns a syntax tree.
 pub fn parse(grammar: Grammar, content: &str) -> Result<Tree, CjkfmtParseError> {
@@ -12,6 +14,7 @@ pub fn parse(grammar: Grammar, content: &str) -> Result<Tree, CjkfmtParseError> 
             Grammar::Json => tree_sitter_json(),
             Grammar::Markdown => tree_sitter_markdown(),
             Grammar::MarkdownInline => tree_sitter_markdown_inline(),
+            Grammar::Python => tree_sitter_python(),
         }
     };
 

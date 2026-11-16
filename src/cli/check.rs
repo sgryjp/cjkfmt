@@ -7,7 +7,10 @@ use std::{
 use crate::language::Language;
 
 use crate::{
-    check::check_one_file, cli::utils::format_diagnostic, config::Config, document::Document,
+    check::{check_line_lengths, check_one_file},
+    cli::utils::format_diagnostic,
+    config::Config,
+    document::Document,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -49,24 +52,33 @@ where
         stdin.read_to_string(&mut content)?;
         let language = language.unwrap_or(Language::Markdown);
         let document = Document::new(content, Some(language), None);
-        diagnostics.extend(check_one_file(config, &document)?);
+        if let Err(error) = collect_document_diagnostics(config, &document, &mut diagnostics) {
+            write_diagnostics(stdout, &mut diagnostics)?;
+            return Err(error);
+        }
     } else {
         for filename in filenames {
             let filename = filename.as_ref();
-            let language =
-                Language::explicit_or_inferred_path(language, filename).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "could not infer the language for {}; specify it with --language",
-                        filename.display()
-                    )
-                })?;
-            let content = fs::read_to_string(filename)?;
-            let document = Document::new(
-                content,
-                Some(language),
-                Some(filename.to_string_lossy().to_string()),
-            );
-            diagnostics.extend(check_one_file(config, &document)?);
+            let result = (|| {
+                let language =
+                    Language::explicit_or_inferred_path(language, filename).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "could not infer the language for {}; specify it with --language",
+                            filename.display()
+                        )
+                    })?;
+                let content = fs::read_to_string(filename)?;
+                let document = Document::new(
+                    content,
+                    Some(language),
+                    Some(filename.to_string_lossy().to_string()),
+                );
+                collect_document_diagnostics(config, &document, &mut diagnostics)
+            })();
+            if let Err(error) = result {
+                write_diagnostics(stdout, &mut diagnostics)?;
+                return Err(error);
+            }
         }
     }
     let outcome = if diagnostics.is_empty() {
@@ -74,10 +86,35 @@ where
     } else {
         CheckOutcome::DiagnosticsFound
     };
-    for diagnostic in diagnostics {
+    write_diagnostics(stdout, &mut diagnostics)?;
+    Ok(outcome)
+}
+
+fn write_diagnostics<W: std::io::Write>(
+    stdout: &mut W,
+    diagnostics: &mut Vec<crate::core::diagnostic::Diagnostic>,
+) -> anyhow::Result<()> {
+    for diagnostic in diagnostics.drain(..) {
         writeln!(stdout, "{}", format_diagnostic(&diagnostic))?;
     }
-    Ok(outcome)
+    Ok(())
+}
+
+fn collect_document_diagnostics(
+    config: &Config,
+    document: &Document,
+    diagnostics: &mut Vec<crate::core::diagnostic::Diagnostic>,
+) -> anyhow::Result<()> {
+    match check_one_file(config, document) {
+        Ok(found) => diagnostics.extend(found),
+        Err(error) => {
+            if document.language == Some(Language::Python) {
+                diagnostics.extend(check_line_lengths(config, document)?);
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

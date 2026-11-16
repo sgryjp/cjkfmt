@@ -4,4 +4,5 @@ unsafe extern "C" {
     pub fn tree_sitter_json() -> Language;
     pub fn tree_sitter_markdown() -> Language;
     pub fn tree_sitter_markdown_inline() -> Language;
+    pub fn tree_sitter_python() -> Language;
 }

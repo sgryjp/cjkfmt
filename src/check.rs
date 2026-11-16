@@ -16,30 +16,31 @@ pub(crate) fn check_one_file(
     config: &Config,
     document: &Document,
 ) -> Result<Vec<Diagnostic>, anyhow::Error> {
-    let mut diagnostics = Vec::new();
-
-    // Initialize required components
-    let breaker = LineBreakPlanner::builder()
-        .ambiguous_width(config.ambiguous_width)
-        .max_width(config.max_width)
-        .build()?;
-
-    let source = PhysicalSource::new(&document.content);
-
-    // Check line length problems
-    for line in source.lines() {
-        if let Some(diagnostic) = check_line_length(&breaker, document, &source, line) {
-            diagnostics.push(diagnostic);
-        }
-    }
+    let mut diagnostics = check_line_lengths(config, document)?;
 
     // Check spacing problems only when a language policy is available.
     if let Some(language) = document.language {
+        let source = PhysicalSource::new(&document.content);
         let spacing_checker = SpacingChecker::new(config, document, language);
         diagnostics.extend(spacing_checker.check(&source)?);
     }
 
     Ok(diagnostics)
+}
+
+pub(crate) fn check_line_lengths(
+    config: &Config,
+    document: &Document,
+) -> anyhow::Result<Vec<Diagnostic>> {
+    let breaker = LineBreakPlanner::builder()
+        .ambiguous_width(config.ambiguous_width)
+        .max_width(config.max_width)
+        .build()?;
+    let source = PhysicalSource::new(&document.content);
+    Ok(source
+        .lines()
+        .filter_map(|line| check_line_length(&breaker, document, &source, line))
+        .collect())
 }
 
 fn check_line_length(

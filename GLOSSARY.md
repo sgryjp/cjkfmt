@@ -12,10 +12,12 @@ _Avoid_: Language formatting, code formatting
 
 **Language**:
 The user-facing kind of input document selected with `--language`. The supported canonical
-values are lowercase `markdown` and `json`; an explicit selection takes precedence over
+values are lowercase `markdown`, `json`, and `python`; an explicit selection takes precedence over
 filename-based detection. Formatting preserves the input language rather than converting it to
 another language.
 JSON selection disables Markdown-prose spacing; line splitting follows the configured policy.
+Python selection applies spacing to eligible comments and actual docstrings while preserving source
+layout.
 _Avoid_: Grammar, parser
 
 **Line wrapping**:

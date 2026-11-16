@@ -58,17 +58,19 @@ Omitting `--write` leaves the source files unchanged and sends formatted content
 
 ### Language Selection
 
-Named files are classified by their final extension: `.md` and `.markdown` select Markdown, and
-`.json` selects JSON. Matching is case-insensitive for ASCII letters. For `check` and `debug-cst`,
-other named paths require an explicit `--language markdown` or `--language json`. An explicit
-selection always takes precedence over the filename. `format` applies Markdown-prose spacing only
-to Markdown input and, by default, runs the general line-wrapping pass for selected Markdown and
-JSON input. Unsupported named paths are returned unchanged by `format` unless an explicit
-`--language` override selects a language.
+Named files are classified by their final extension: `.md` and `.markdown` select Markdown, `.json`
+selects JSON, and `.py`, `.pyi`, and `.pyw` select Python. Matching is case-insensitive for ASCII
+letters. For `check`
+and `debug-cst`, other named paths require an explicit `--language` selection. An explicit
+selection always takes precedence over the filename. `format` applies Markdown-prose spacing only to
+Markdown input. It applies safe comment spacing to Python input but never changes Python layout or
+wraps Python lines. The general line-wrapping pass runs for selected Markdown and JSON input.
+Unsupported named paths are returned unchanged by `format` unless an explicit `--language` override
+selects a language.
 
 When reading stdin without `--language`, `check` and `debug-cst` assume Markdown. `format` does not
 select a language, so it skips both Markdown-prose spacing and line wrapping. Use `--language
-markdown` or `--language json` to select the stdin language explicitly.
+markdown`, `--language json`, or `--language python` to select the stdin language explicitly.
 
 ### Line Wrapping
 
@@ -144,8 +146,11 @@ Depending on the configuration source, the option names are formatted slightly d
 
 The `format` command applies the spacing rules to Markdown prose, including visible text inside
 emphasis and links. Code spans, fenced code blocks, URLs, HTML, and other non-prose inline content
-are left unchanged. For the implementation-level character classification and the difference between
-`check` and `format`, see [the spacing implementation notes](docs/design/spacing.md).
+are left unchanged. Python support covers safe comments and actual docstrings. Marked examples and
+link destinations are protected while safe surrounding prose remains eligible. See
+[Python support](docs/design/python.md) for
+coverage, grammar, and encoding details. For spacing behavior, see [the spacing
+specification](docs/design/spacing.md).
 
 Below is an example configuration file `.cjkfmt.json`.
 

@@ -67,6 +67,10 @@ impl<'a> PhysicalSource<'a> {
             for (relative_offset, character) in text[span.start..span.content_end].char_indices() {
                 let character_start = span.start + relative_offset;
                 utf16_columns[character_start] = column;
+                if character_start == 0 && character == '\u{feff}' {
+                    utf16_columns[character_start + character.len_utf8()] = column;
+                    continue;
+                }
                 column = column.wrapping_add(character.len_utf16() as u32);
                 utf16_columns[character_start + character.len_utf8()] = column;
             }
@@ -248,6 +252,15 @@ mod tests {
                 Position::new(1, 1)
             );
         }
+    }
+
+    #[test]
+    fn treats_a_leading_bom_as_a_signature_not_a_source_column() {
+        let source = PhysicalSource::new("\u{feff}漢A");
+
+        assert_eq!(source.position(0), Position::new(0, 0));
+        assert_eq!(source.position("\u{feff}".len()), Position::new(0, 0));
+        assert_eq!(source.position("\u{feff}漢".len()), Position::new(0, 1));
     }
 
     #[test]
